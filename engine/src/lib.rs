@@ -7,9 +7,9 @@ use rand::Rng;
 use geom::Vec2;
 use geom::Rect;
 use level::Level;
-use assets_manager::{asset::Png, AssetCache};
+use assets_manager::AssetCache;
 use frenderer::{
-    input::{Input, Key}, sprites::{Camera2D, SheetRegion, Transform}, wgpu, Immediate
+    input::Input, sprites::Camera2D, Immediate
 };
 const DT: f32 = 1.0 / 60.0;
 const TILE_SZ: usize = 16;
@@ -129,7 +129,7 @@ pub fn main_loop<G:Game> (cache: AssetCache) where G: Game + 'static  {
         winit::window::WindowBuilder::new()
             .with_title("test")
             .with_inner_size(winit::dpi::LogicalSize::new(1024.0, 768.0)),
-        Some((220 as u32, 140 as u32)),
+        Some((220, 140)),
     );
 
     let mut input = Input::default();
@@ -142,7 +142,7 @@ pub fn main_loop<G:Game> (cache: AssetCache) where G: Game + 'static  {
             let mut world = World {
                 camera: Camera2D {
                     screen_pos: [0.0, 0.0],
-                    screen_size: [220 as f32, 140 as f32],
+                    screen_size: [220.0, 140.0],
                 },
                 current_level: 0,
                 levels: vec![],
@@ -191,7 +191,7 @@ pub fn main_loop<G:Game> (cache: AssetCache) where G: Game + 'static  {
                         game.update(world, &input);
                         input.next_frame();
                     }
-                    game.render(&world, frend);
+                    game.render(world, frend);
                     frend.render();
                     window.request_redraw();
                 }

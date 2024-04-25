@@ -1,13 +1,15 @@
 use assets_manager::{asset::Png, AssetCache};
-use frenderer::{
-    input::{Input, Key}, sprites::{Camera2D, SheetRegion, Transform}, wgpu, Immediate
-};
-use rand::Rng;
-use engine::{geom::*, main_loop, Game, World};
 use engine::level::Level;
 use engine::Contact;
 use engine::Dir;
 use engine::Pos;
+use engine::{geom::*, World};
+use frenderer::{
+    input::{Input, Key},
+    sprites::{Camera2D, SheetRegion, Transform},
+    wgpu, Immediate,
+};
+use rand::Rng;
 
 const PLAYER: [SheetRegion; 4] = [
     //n, e, s, w
@@ -74,8 +76,8 @@ struct AdventureGame {
 }
 
 impl AdventureGame {
-    fn new(world: &mut World, renderer: &mut Immediate, cache: AssetCache) -> Self {
-        let mut game = AdventureGame {
+    fn new(world: &mut World) -> Self {
+        let game = AdventureGame {
             attack_area: Rect {
                 x: 0.0,
                 y: 0.0,
@@ -98,13 +100,13 @@ impl AdventureGame {
         world.enter_level(player_start);
         game
     }
-    
+
     fn draw_hud(&self, frend: &mut Immediate) {
         // render an upgrade menu
-        
+
         // draw UI with health and experience
         let heart_pos = Transform {
-            w: TILE_SZ as u16, 
+            w: TILE_SZ as u16,
             h: TILE_SZ as u16,
             x: 10.0,
             y: 6.0,
@@ -116,31 +118,40 @@ impl AdventureGame {
             //     ..heart_pos
             // };
             // sprite_gfx[k] = HEART.with_depth(0);
-            frend.draw_sprite(1, Transform {
-                x: heart_pos.x + i as f32 * TILE_SZ as f32,
-                ..heart_pos
-            }, HEART.with_depth(1));
+            frend.draw_sprite(
+                1,
+                Transform {
+                    x: heart_pos.x + i as f32 * TILE_SZ as f32,
+                    ..heart_pos
+                },
+                HEART.with_depth(1),
+            );
         }
         let exp_pos = Transform {
-            w: TILE_SZ as u16, 
+            w: TILE_SZ as u16,
             h: TILE_SZ as u16,
             x: W as f32 - 10.0,
             y: H as f32 - 10.0,
             rot: 0.0,
         };
         for i in 0..self.xp {
-            frend.draw_sprite(1, Transform {
-                x: exp_pos.x - i as f32 * 12_f32,
-                ..exp_pos
-            }, EXPERIENCE.with_depth(1));
+            frend.draw_sprite(
+                1,
+                Transform {
+                    x: exp_pos.x - i as f32 * 12_f32,
+                    ..exp_pos
+                },
+                EXPERIENCE.with_depth(1),
+            );
         }
     }
     fn simulate(&mut self, world: &mut World, input: &Input, dt: f32) {
         if !world.paused {
             world.spawn_enemies();
         }
-        
-        if self.xp == LEVELUP { // upgrade menu showing up is a bit buggy but seems to work :)
+
+        if self.xp == LEVELUP {
+            // upgrade menu showing up is a bit buggy but seems to work :)
             self.upgrade = true;
             world.pause();
             self.xp = 0;
@@ -160,11 +171,12 @@ impl AdventureGame {
         if input.is_key_pressed(Key::Escape) {
             world.pause();
         }
-        if world.paused || world.game_end { // stop generating enemies when paused/game ends
+        if world.paused || world.game_end {
+            // stop generating enemies when paused/game ends
             // self.simulate_pause(input, dt)
             return;
         }
-        
+
         if self.attack_timer > 0.0 {
             self.attack_timer -= dt;
         }
@@ -200,10 +212,10 @@ impl AdventureGame {
             // For the spritesheet provided, the attack is placed 8px "forwards" from the player.
             self.attack_timer = ATTACK_MAX_TIME;
             self.attack_area = Rect {
-                x: world.player.pos.x - (TILE_SZ as f32*(self.attack_range/2.0)),
-                y: world.player.pos.y - (TILE_SZ as f32*(self.attack_range/2.0)),
-                w: self.attack_range as u16 *TILE_SZ as u16,
-                h: self.attack_range as u16 *TILE_SZ as u16,
+                x: world.player.pos.x - (TILE_SZ as f32 * (self.attack_range / 2.0)),
+                y: world.player.pos.y - (TILE_SZ as f32 * (self.attack_range / 2.0)),
+                w: self.attack_range as u16 * TILE_SZ as u16,
+                h: self.attack_range as u16 * TILE_SZ as u16,
             }
         } else if self.attack_timer <= ATTACK_COOLDOWN_TIME {
             // "turn off" the attack, but the cooldown is still going
@@ -230,8 +242,11 @@ impl AdventureGame {
                 };
             }
             let enemy_dest = enemy.0.pos + (enemy.0.dir.to_vec2() * ENEMY_SPEED * dt);
-            if (enemy_dest.x >= 0.0 && enemy_dest.x <= (world.levels[world.current_level].width()*TILE_SZ) as f32)
-             && (enemy_dest.y > 0.0 && enemy_dest.y <= (world.levels[world.current_level].height()*TILE_SZ) as f32) 
+            if (enemy_dest.x >= 0.0
+                && enemy_dest.x <= (world.levels[world.current_level].width() * TILE_SZ) as f32)
+                && (enemy_dest.y > 0.0
+                    && enemy_dest.y
+                        <= (world.levels[world.current_level].height() * TILE_SZ) as f32)
             {
                 enemy.0.pos = enemy_dest;
             }
@@ -279,7 +294,7 @@ impl AdventureGame {
         // Tile and Enemy contacts
         let mut tile_enemy_contacts = Vec::new();
         generate_tile_contact(&enemy_rect, world.level(), &mut tile_enemy_contacts);
-        
+
         // Contact Resolution for player vs. world
         tile_contacts.sort_by(|a, b| {
             b.displacement
@@ -313,12 +328,12 @@ impl AdventureGame {
 
         let mut removable = Vec::new();
         for contact in contacts {
-            if contact.a_index == 1 && !removable.contains(&contact.b_index){
+            if contact.a_index == 1 && !removable.contains(&contact.b_index) {
                 world.enemies[contact.b_index].0.pos +=
                     find_displacement(p_rect, enemy_rect[contact.b_index]);
                 removable.push(contact.b_index);
                 self.xp += 1; // this might be wrong as it gives xp when an enemy dies in a wall
-                // dbg!(self.xp);
+                              // dbg!(self.xp);
             }
             if contact.a_index == 0 {
                 if self.knockback_timer == 0.0 {
@@ -341,145 +356,225 @@ impl AdventureGame {
             world.enemies.swap_remove(*i);
         }
     }
-
 }
 
 impl engine::Game for AdventureGame {
-    fn update(&mut self, world:&mut engine::World, input: &Input) {
+    fn update(&mut self, world: &mut engine::World, input: &Input) {
         self.simulate(world, input, DT);
     }
-    fn render(&mut self, world:&engine::World, frend: &mut Immediate) {
-         // make this exactly as big as we need
-         frend.sprite_group_set_camera(0, world.camera);
+    fn render(&mut self, world: &engine::World, frend: &mut Immediate) {
+        // make this exactly as big as we need
+        frend.sprite_group_set_camera(0, world.camera);
 
-         world.level().render_immediate(frend);
-         
-         for enemy in world.enemies.iter()
-         {
-             if enemy.1 == 1 {
-                 frend.draw_sprite(0, Transform {
-                     w: TILE_SZ as u16,
-                     h: TILE_SZ as u16,
-                     x: enemy.0.pos.x,
-                     y: enemy.0.pos.y,
-                     rot: 0.0,
-                 }, ENEMY[enemy.0.dir as usize].with_depth(3));
-             }
-             else {
-                 frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
-             }
-         }
- 
-         // draw pause menu & HUD
-         self.draw_hud(frend);
-         
-         if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
-             frend.draw_sprite(0, Transform {
-                 w: TILE_SZ as u16,
-                 h: TILE_SZ as u16,
-                 x: world.player.pos.x,
-                 y: world.player.pos.y,
-                 rot: 0.0,
-             }, SheetRegion::ZERO);
-         } else{
-             frend.draw_sprite(0, Transform {
-                 w: TILE_SZ as u16,
-                 h: TILE_SZ as u16,
-                 x: world.player.pos.x,
-                 y: world.player.pos.y,
-                 rot: 0.0,
-             }, PLAYER[world.player.dir as usize].with_depth(2));
-         }
-         if world.game_end { // player disappears when game ends (no more health)
-             frend.draw_sprite(0, Transform {
-                 w: TILE_SZ as u16,
-                 h: TILE_SZ as u16,
-                 x: world.player.pos.x,
-                 y: world.player.pos.y,
-                 rot: 0.0,
-             }, SheetRegion::ZERO);
-         }
-         
-         if self.attack_area.is_empty() {
-             // sprite_posns[1] = Transform::ZERO;
-         } else {
-             let (w, h) = match world.player.dir {
-                 Dir::N | Dir::S => (16, 8),
-                 _ => (8, 16),
-             };
-             let delta = world.player.dir.to_vec2() * 7.0;
-             frend.draw_sprite(0, Transform {
-                 w,
-                 h,
-                 x: world.player.pos.x + delta.x,
-                 y: world.player.pos.y + delta.y,
-                 rot: 0.0,
-             }, BLANK.with_depth(2));
- 
-             frend.draw_sprite(0, Transform {
-                 w: (self.attack_range as usize * TILE_SZ) as u16,
-                 h: (self.attack_range as usize * TILE_SZ) as u16,
-                 x: world.player.pos.x,
-                 y: world.player.pos.y,
-                 rot: 0.0,
-             }, ATK.with_depth(2));    
-             
-         }
- 
-         if world.paused {
-             let nine_tiled = frenderer::nineslice::NineSlice::with_corner_edge_center(
-                 frenderer::nineslice::CornerSlice {
-                     w: 16.0,
-                     h: 16.0,
-                     region: SheetRegion::rect(628, 55, 16, 16).with_depth(1),
-                 }, 
-                 frenderer::nineslice::Slice {
-                     w: 16.0,
-                     h: 16.0,
-                     region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
-                     repeat: frenderer::nineslice::Repeat::Tile,
-                 }, 
-                 frenderer::nineslice::Slice {
-                     w: 16.0,
-                     h: 16.0,
-                     region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
-                     repeat: frenderer::nineslice::Repeat::Tile,
-                 }, 
-                 frenderer::nineslice::Slice {
-                     w: 16.0,
-                     h: 16.0,
-                     region: SheetRegion::rect(679, 55, 16, 16).with_depth(1),
-                     repeat: frenderer::nineslice::Repeat::Tile,
-                 });
-                 let pause_x = W as f32/2.0 - 4.0*TILE_SZ as f32; 
-                 let pause_y = H as f32/2.0 - 3.0*TILE_SZ as f32; 
-             frend.draw_nineslice(1, &nine_tiled, pause_x, pause_y, 8.0*TILE_SZ as f32, 6.0*TILE_SZ as f32, 0);  
- 
-             let font = frenderer::bitfont::BitFont::with_sheet_region(
-                 ' '..='ÿ', 
-                 SheetRegion::new(0, 0, 143, 0, 288, 70).with_depth(0), 
-                 (8) as u16, 
-                 (8) as u16, 
-                 (1) as u16, 
-                 (2) as u16);
-             
-             if self.upgrade{
-                 let mut text = "upgrades time";
-                 frend.draw_text(1, &font, text, [(W/2) as f32 - 3.5*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
-                 text = ":Q"; //TODO: update the positions of these and add heart for health upgrade and sword for attack radius upgrade
-                 frend.draw_text(1, &font, text, [(W/2) as f32 - 3.5*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
-                 text = ":E";
-                 frend.draw_text(1, &font, text, [(W/2) as f32 - 3.5*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
-             } else {
-                 let mut text = "game paused!";
-                 frend.draw_text(1, &font, text, [(W/2) as f32 - 3.0*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
-                 text = "unpause: Esc";
-                 frend.draw_text(1, &font, text, [(W/2) as f32 - 3.25*TILE_SZ as f32, (H/2) as f32 - TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
- 
-             }
-         }
+        world.level().render_immediate(frend);
+
+        for enemy in world.enemies.iter() {
+            if enemy.1 == 1 {
+                frend.draw_sprite(
+                    0,
+                    Transform {
+                        w: TILE_SZ as u16,
+                        h: TILE_SZ as u16,
+                        x: enemy.0.pos.x,
+                        y: enemy.0.pos.y,
+                        rot: 0.0,
+                    },
+                    ENEMY[enemy.0.dir as usize].with_depth(3),
+                );
+            } else {
+                frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
+            }
+        }
+
+        // draw pause menu & HUD
+        self.draw_hud(frend);
+
+        if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: world.player.pos.x,
+                    y: world.player.pos.y,
+                    rot: 0.0,
+                },
+                SheetRegion::ZERO,
+            );
+        } else {
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: world.player.pos.x,
+                    y: world.player.pos.y,
+                    rot: 0.0,
+                },
+                PLAYER[world.player.dir as usize].with_depth(2),
+            );
+        }
+        if world.game_end {
+            // player disappears when game ends (no more health)
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: world.player.pos.x,
+                    y: world.player.pos.y,
+                    rot: 0.0,
+                },
+                SheetRegion::ZERO,
+            );
+        }
+
+        if self.attack_area.is_empty() {
+            // sprite_posns[1] = Transform::ZERO;
+        } else {
+            let (w, h) = match world.player.dir {
+                Dir::N | Dir::S => (16, 8),
+                _ => (8, 16),
+            };
+            let delta = world.player.dir.to_vec2() * 7.0;
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w,
+                    h,
+                    x: world.player.pos.x + delta.x,
+                    y: world.player.pos.y + delta.y,
+                    rot: 0.0,
+                },
+                BLANK.with_depth(2),
+            );
+
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w: (self.attack_range as usize * TILE_SZ) as u16,
+                    h: (self.attack_range as usize * TILE_SZ) as u16,
+                    x: world.player.pos.x,
+                    y: world.player.pos.y,
+                    rot: 0.0,
+                },
+                ATK.with_depth(2),
+            );
+        }
+
+        if world.paused {
+            let nine_tiled = frenderer::nineslice::NineSlice::with_corner_edge_center(
+                frenderer::nineslice::CornerSlice {
+                    w: 16.0,
+                    h: 16.0,
+                    region: SheetRegion::rect(628, 55, 16, 16).with_depth(1),
+                },
+                frenderer::nineslice::Slice {
+                    w: 16.0,
+                    h: 16.0,
+                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
+                    repeat: frenderer::nineslice::Repeat::Tile,
+                },
+                frenderer::nineslice::Slice {
+                    w: 16.0,
+                    h: 16.0,
+                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
+                    repeat: frenderer::nineslice::Repeat::Tile,
+                },
+                frenderer::nineslice::Slice {
+                    w: 16.0,
+                    h: 16.0,
+                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(1),
+                    repeat: frenderer::nineslice::Repeat::Tile,
+                },
+            );
+            let pause_x = W as f32 / 2.0 - 4.0 * TILE_SZ as f32;
+            let pause_y = H as f32 / 2.0 - 3.0 * TILE_SZ as f32;
+            frend.draw_nineslice(
+                1,
+                &nine_tiled,
+                pause_x,
+                pause_y,
+                8.0 * TILE_SZ as f32,
+                6.0 * TILE_SZ as f32,
+                0,
+            );
+
+            let font = frenderer::bitfont::BitFont::with_sheet_region(
+                ' '..='ÿ',
+                SheetRegion::new(0, 0, 143, 0, 288, 70).with_depth(0),
+                8_u16,
+                8_u16,
+                1_u16,
+                2_u16,
+            );
+
+            if self.upgrade {
+                let mut text = "upgrades time";
+                frend.draw_text(
+                    1,
+                    &font,
+                    text,
+                    [
+                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
+                        (H / 2) as f32 + TILE_SZ as f32,
+                    ],
+                    0,
+                    (TILE_SZ / 2) as f32,
+                );
+                text = ":Q"; //TODO: update the positions of these and add heart for health upgrade and sword for attack radius upgrade
+                frend.draw_text(
+                    1,
+                    &font,
+                    text,
+                    [
+                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
+                        (H / 2) as f32 + TILE_SZ as f32,
+                    ],
+                    0,
+                    (TILE_SZ / 2) as f32,
+                );
+                text = ":E";
+                frend.draw_text(
+                    1,
+                    &font,
+                    text,
+                    [
+                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
+                        (H / 2) as f32 + TILE_SZ as f32,
+                    ],
+                    0,
+                    (TILE_SZ / 2) as f32,
+                );
+            } else {
+                let mut text = "game paused!";
+                frend.draw_text(
+                    1,
+                    &font,
+                    text,
+                    [
+                        (W / 2) as f32 - 3.0 * TILE_SZ as f32,
+                        (H / 2) as f32 + TILE_SZ as f32,
+                    ],
+                    0,
+                    (TILE_SZ / 2) as f32,
+                );
+                text = "unpause: Esc";
+                frend.draw_text(
+                    1,
+                    &font,
+                    text,
+                    [
+                        (W / 2) as f32 - 3.25 * TILE_SZ as f32,
+                        (H / 2) as f32 - TILE_SZ as f32,
+                    ],
+                    0,
+                    (TILE_SZ / 2) as f32,
+                );
+            }
+        }
     }
-    fn new(renderer: &mut Immediate, cache: AssetCache, world:&mut engine::World) -> Self{
+    fn new(renderer: &mut Immediate, cache: AssetCache, world: &mut engine::World) -> Self {
         let tile_handle = cache
             .load::<Png>("texture")
             .expect("Couldn't load tilesheet img");
@@ -490,31 +585,31 @@ impl engine::Game for AdventureGame {
             tile_img.dimensions(),
             Some("tiles-sprites"),
         );
-        
+
         let levels = vec![
             Level::from_str(
                 &cache
                     .load::<String>("level3")
                     .expect("Couldn't access level3.txt")
                     .read(),
-                    0,
-                    0,
+                0,
+                0,
             ),
             Level::from_str(
                 &cache
                     .load::<String>("level1")
                     .expect("Couldn't access level1.txt")
                     .read(),
-                    0,
-                    0,
+                0,
+                0,
             ),
             Level::from_str(
                 &cache
                     .load::<String>("level2")
                     .expect("Couldn't access level2.txt")
                     .read(),
-                    0,
-                    0,
+                0,
+                0,
             ),
         ];
         let current_level = 0;
@@ -525,17 +620,9 @@ impl engine::Game for AdventureGame {
         let sprite_estimate =
             levels[current_level].sprite_count() + levels[current_level].starts().len();
         // tile sprite group: 0
-        renderer.sprite_group_add(
-            &tile_tex,
-            sprite_estimate,
-            camera,
-        );
+        renderer.sprite_group_add(&tile_tex, sprite_estimate, camera);
         // HUD sprite group: 1
-        renderer.sprite_group_add(
-            &tile_tex,
-            sprite_estimate,
-            camera,
-        );
+        renderer.sprite_group_add(&tile_tex, sprite_estimate, camera);
         let player_start = *levels[current_level]
             .starts()
             .iter()
@@ -546,13 +633,11 @@ impl engine::Game for AdventureGame {
         world.set_levels(levels);
         world.set_current_level(current_level);
         world.set_enemies(vec![]);
-        world.set_player( 
-            Pos {
+        world.set_player(Pos {
             pos: player_start,
             dir: Dir::S,
         });
-        let mut game = AdventureGame::new(world, renderer, cache);
-        game
+        AdventureGame::new(world)
     }
 }
 
