@@ -29,6 +29,7 @@ name = "adventure-game"
 version = "0.1.0"
 dependencies = [
  "assets_manager",
+ "engine",
  "frenderer",
  "getrandom",
  "image",
@@ -537,6 +538,13 @@ checksum = "a47c1c47d2f5964e29c61246e81db715514cd532db6b5116a25ea3c03d6780a2"
 [[package]]
 name = "engine"
 version = "0.1.0"
+dependencies = [
+ "assets_manager",
+ "frenderer",
+ "image",
+ "rand",
+ "winit",
+]
 
 [[package]]
 name = "env_logger"

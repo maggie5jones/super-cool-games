@@ -3,29 +3,13 @@ use frenderer::{
     input::{Input, Key}, sprites::{Camera2D, SheetRegion, Transform}, wgpu, Immediate
 };
 use rand::Rng;
-mod geom;
-mod grid;
-use geom::*;
-mod level;
-use level::Level;
+use engine::{geom::*, World};
+use engine::level::Level;
 
-#[derive(Clone, Debug)]
-struct Contact {
-    displacement: Vec2,
-    a_index: usize,
-    _a_rect: Rect,
-    b_index: usize,
-    b_rect: Rect,
-}
+use engine::Contact;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-enum Dir {
-    N,
-    E,
-    S,
-    W,
-}
+use engine::Dir;
+
 const PLAYER: [SheetRegion; 4] = [
     //n, e, s, w
     SheetRegion::rect(461 + 16 * 2, 39, 16, 16),
@@ -52,37 +36,7 @@ const EXPERIENCE: SheetRegion = SheetRegion::rect(525, 50, 8, 8);
 const ATK: SheetRegion = SheetRegion::rect(525, 19, 8, 8);
 const BLANK: SheetRegion = SheetRegion::rect(600, 600, 16, 16);
 
-impl Dir {
-    fn to_vec2(self) -> Vec2 {
-        match self {
-            Dir::N => Vec2 { x: 0.0, y: 1.0 },
-            Dir::E => Vec2 { x: 1.0, y: 0.0 },
-            Dir::S => Vec2 { x: 0.0, y: -1.0 },
-            Dir::W => Vec2 { x: -1.0, y: 0.0 },
-        }
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Pos {
-    pos: Vec2,
-    dir: Dir,
-}
-struct Game {
-    camera: Camera2D,
-    current_level: usize,
-    levels: Vec<Level>,
-    enemies: Vec<(Pos, usize)>,
-    player: Pos,
-    attack_area: Rect,
-    attack_range: f32,
-    attack_timer: f32,
-    knockback_timer: f32,
-    health: u8,
-    xp: u8,
-    paused: bool,
-    game_end: bool,
-    upgrade: bool,
-}
+use engine::Pos;
 
 // Feel free to change this if you use a different tilesheet
 const TILE_SZ: usize = 16;
@@ -111,72 +65,23 @@ fn main() {
     let source = assets_manager::source::Embedded::from(assets_manager::source::embed!("content"));
     let cache = assets_manager::AssetCache::with_source(source);
 
-    let drv = frenderer::Driver::new(
-        winit::window::WindowBuilder::new()
-            .with_title("test")
-            .with_inner_size(winit::dpi::LogicalSize::new(1024.0, 768.0)),
-        Some((W as u32, H as u32)),
-    );
-
-    let mut input = Input::default();
-
-    let mut now = frenderer::clock::Instant::now();
-    let mut acc = 0.0;
-    drv.run_event_loop::<(), _>(
-        move |window, frend| {
-            let mut frend = Immediate::new(frend);
-            let game = Game::new(&mut frend, &cache);
-            (window, game, frend)
-        },
-        move |event, target, (window, ref mut game, ref mut frend)| {
-            use winit::event::{Event, WindowEvent};
-            match event {
-                Event::WindowEvent {
-                    event: WindowEvent::CloseRequested,
-                    ..
-                } => {
-                    target.exit();
-                }
-                Event::WindowEvent {
-                    event: WindowEvent::Resized(size),
-                    ..
-                } => {
-                    if !frend.gpu().is_web() {
-                        frend.resize_surface(size.width, size.height);
-                    }
-                    window.request_redraw();
-                }
-                Event::WindowEvent {
-                    event: WindowEvent::RedrawRequested,
-                    ..
-                } => {
-                    let elapsed = now.elapsed().as_secs_f32();
-                    // You can add the time snapping/death spiral prevention stuff here if you want.
-                    // I'm not using it here to keep the starter code small.
-                    acc += elapsed;
-                    now = std::time::Instant::now();
-                    // While we have time to spend
-                    while acc >= DT {
-                        // simulate a frame
-                        acc -= DT;
-                        game.simulate(&input, DT);
-                        input.next_frame();
-                    }
-                    game.render(frend);
-                    frend.render();
-                    window.request_redraw();
-                }
-                event => {
-                    input.process_input_event(&event);
-                }
-            }
-        },
-    )
-    .expect("event loop error");
+    // from here
+    
+}
+struct Game {
+    pub attack_area: Rect,
+    pub attack_range: f32,
+    pub attack_timer: f32,
+    pub knockback_timer: f32,
+    pub health: u8,
+    pub xp: u8,
+    pub paused: bool,
+    pub game_end: bool,
+    pub upgrade: bool,
 }
 
 impl Game {
-    fn new(renderer: &mut Immediate, cache: &AssetCache) -> Self {
+    fn new(world: &mut World, renderer: &mut Immediate, cache: &AssetCache) -> Self {
         let tile_handle = cache
             .load::<Png>("texture")
             .expect("Couldn't load tilesheet img");
@@ -187,64 +92,8 @@ impl Game {
             tile_img.dimensions(),
             Some("tiles-sprites"),
         );
-        let levels = vec![
-            Level::from_str(
-                &cache
-                    .load::<String>("level3")
-                    .expect("Couldn't access level3.txt")
-                    .read(),
-                    0,
-                    0,
-            ),
-            Level::from_str(
-                &cache
-                    .load::<String>("level1")
-                    .expect("Couldn't access level1.txt")
-                    .read(),
-                    0,
-                    0,
-            ),
-            Level::from_str(
-                &cache
-                    .load::<String>("level2")
-                    .expect("Couldn't access level2.txt")
-                    .read(),
-                    0,
-                    0,
-            ),
-        ];
-        let current_level = 0;
-        let camera = Camera2D {
-            screen_pos: [0.0, 0.0],
-            screen_size: [W as f32, H as f32],
-        };
-        let sprite_estimate =
-            levels[current_level].sprite_count() + levels[current_level].starts().len();
-        // tile sprite group: 0
-        renderer.sprite_group_add(
-            &tile_tex,
-            sprite_estimate,
-            //vec![Transform::ZERO; sprite_estimate],
-            //vec![SheetRegion::ZERO; sprite_estimate],
-            camera,
-        );
-        // HUD sprite group: 1
-        renderer.sprite_group_add(
-            &tile_tex,
-            sprite_estimate,
-            //vec![Transform::ZERO; sprite_estimate],
-            //svec![SheetRegion::ZERO; sprite_estimate],
-            camera,
-        );
-        let player_start = *levels[current_level]
-            .starts()
-            .iter()
-            .find(|(t, _)| t.name() == "player")
-            .map(|(_, ploc)| ploc)
-            .expect("Start level doesn't put the player anywhere");
+        
         let mut game = Game {
-            camera,
-            current_level,
             attack_area: Rect {
                 x: 0.0,
                 y: 0.0,
@@ -254,14 +103,8 @@ impl Game {
             knockback_timer: 0.0,
             attack_timer: 0.0,
             attack_range: 3.0,
-            levels,
             health: 3,
             xp: 0,
-            enemies: vec![],
-            player: Pos {
-                pos: player_start,
-                dir: Dir::S,
-            },
             paused: false,
             game_end: false,
             upgrade: false,
@@ -768,7 +611,80 @@ impl Game {
             self.enemies.swap_remove(*i);
         }
     }
-    
+
+}
+
+impl engine::Game for Game {
+    fn update(&mut self, world:&mut engine::World) {
+        
+    }
+    fn new(renderer: &mut Immediate, cache: &AssetCache, world:&mut engine::World) {
+        let levels = vec![
+            Level::from_str(
+                &cache
+                    .load::<String>("level3")
+                    .expect("Couldn't access level3.txt")
+                    .read(),
+                    0,
+                    0,
+            ),
+            Level::from_str(
+                &cache
+                    .load::<String>("level1")
+                    .expect("Couldn't access level1.txt")
+                    .read(),
+                    0,
+                    0,
+            ),
+            Level::from_str(
+                &cache
+                    .load::<String>("level2")
+                    .expect("Couldn't access level2.txt")
+                    .read(),
+                    0,
+                    0,
+            ),
+        ];
+        let current_level = 0;
+        let camera = Camera2D {
+            screen_pos: [0.0, 0.0],
+            screen_size: [W as f32, H as f32],
+        };
+        let sprite_estimate =
+            levels[current_level].sprite_count() + levels[current_level].starts().len();
+        // tile sprite group: 0
+        renderer.sprite_group_add(
+            &tile_tex,
+            sprite_estimate,
+            //vec![Transform::ZERO; sprite_estimate],
+            //vec![SheetRegion::ZERO; sprite_estimate],
+            camera,
+        );
+        // HUD sprite group: 1
+        renderer.sprite_group_add(
+            &tile_tex,
+            sprite_estimate,
+            //vec![Transform::ZERO; sprite_estimate],
+            //svec![SheetRegion::ZERO; sprite_estimate],
+            camera,
+        );
+        let player_start = *levels[current_level]
+            .starts()
+            .iter()
+            .find(|(t, _)| t.name() == "player")
+            .map(|(_, ploc)| ploc)
+            .expect("Start level doesn't put the player anywhere");
+        world = &mut World {
+            camera,
+            current_level,
+            levels,
+            enemies: vec![],
+            player: Pos {
+                pos: player_start,
+                dir: Dir::S,
+            },
+        }
+    }
 }
 
 fn generate_contact(group_a: &[Rect], group_b: &[Rect], contacts: &mut Vec<Contact>) {
