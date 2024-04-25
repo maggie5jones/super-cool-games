@@ -1,6 +1,9 @@
 pub mod geom;
 pub mod level;
 pub mod grid;
+use std::vec;
+
+use rand::Rng;
 use geom::Vec2;
 use geom::Rect;
 use level::Level;
@@ -9,6 +12,7 @@ use frenderer::{
     input::{Input, Key}, sprites::{Camera2D, SheetRegion, Transform}, wgpu, Immediate
 };
 const DT: f32 = 1.0 / 60.0;
+const TILE_SZ: usize = 16;
 
 #[derive(Clone, Debug)]
 pub struct Contact {
@@ -44,68 +48,83 @@ pub struct Pos {
     pub pos: Vec2,
     pub dir: Dir,
 }
-
 pub struct World {
     pub camera: Camera2D,
     pub current_level: usize,
     pub levels: Vec<Level>,
     pub enemies: Vec<(Pos, usize)>,
     pub player: Pos,
+    pub paused: bool,
+    pub game_end: bool,
+}
+
+impl World {
+    pub fn level(&self) -> &Level {
+        &self.levels[self.current_level]
+    }
+    pub fn enter_level(&mut self, player_pos: Vec2) {
+        self.enemies.clear();
+        self.player.pos = player_pos;
+        for (etype, pos) in self.levels[self.current_level].starts().iter() {
+            if etype.name() == "enemy" { self.enemies.push((Pos {
+                pos: *pos,
+                dir: Dir::S,
+            }, 1)) };
+        }
+    }
+    pub fn spawn_enemies(&mut self) {
+        // if self.paused || self.game_end { // stop generating enemies when paused/game ends
+        //     return;
+        // } // we can probably deal with this condition in game not engine
+
+        let mut rng = rand::thread_rng();
+        let rand = rng.gen_range(0..1000);
+        if rand > 960 {
+            let mut randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
+            let mut randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
+            while ((randx as f32 - self.player.pos.x).abs() < 48.0) && ((randy as f32 - self.player.pos.y).abs() < 48.0)
+            && !self.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid  {
+                randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
+                randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
+            } 
+            let monster = Pos {
+                pos: Vec2{x: randx as f32, y: randy as f32},
+                dir: Dir::S,
+            };
+            self.enemies.push((monster, 1));
+        }
+    }
+    pub fn set_camera(&mut self, camera: Camera2D) {
+        self.camera = camera;
+    }
+    pub fn set_levels(&mut self, levels: Vec<Level>) {
+        self.levels = levels;
+    }
+    pub fn set_current_level(&mut self, level: usize) {
+        self.current_level = level;
+    }
+    pub fn set_enemies(&mut self, enemies: Vec<(Pos, usize)>) {
+        self.enemies = enemies;
+    }
+    pub fn set_player(&mut self, player: Pos) {
+        self.player = player;
+    }
+    pub fn pause(&mut self) {
+        self.paused = !self.paused;
+    }
+    pub fn game_over(&mut self) {
+        self.game_end = true;
+    }
 }
 
 pub trait Game {
-    fn update(&mut self, world: &mut World);
-    fn new(renderer: &mut Immediate, cache: &AssetCache, world: &mut World);
+    fn update(&mut self, world: &mut World, input: &Input);
+    fn render(&mut self, world: &World, frend: &mut Immediate);
+    fn new(renderer: &mut Immediate, cache: AssetCache, world: &mut World) -> Self;
 }
 
-pub fn main_loop(frend: &mut Immediate, cache: &AssetCache) {
-    let levels = vec![
-        Level::from_str(
-            &cache
-                .load::<String>("level3")
-                .expect("Couldn't access level3.txt")
-                .read(),
-                0,
-                0,
-        ),
-        Level::from_str(
-            &cache
-                .load::<String>("level1")
-                .expect("Couldn't access level1.txt")
-                .read(),
-                0,
-                0,
-        ),
-        Level::from_str(
-            &cache
-                .load::<String>("level2")
-                .expect("Couldn't access level2.txt")
-                .read(),
-                0,
-                0,
-        ),
-    ];
-    let current_level = 0;
-    let player_start = *levels[current_level]
-            .starts()
-            .iter()
-            .find(|(t, _)| t.name() == "player")
-            .map(|(_, ploc)| ploc)
-            .expect("Start level doesn't put the player anywhere");
-    let mut world = World {
-        camera: Camera2D {
-            screen_pos: [0.0, 0.0],
-            screen_size: [220 as f32, 140 as f32],
-        },
-        current_level,
-        levels,
-        enemies: vec![],
-        player: Pos {
-            pos: player_start,
-            dir: Dir::S,
-        },
-    };
 
+pub fn main_loop<G:Game> (cache: AssetCache) where G: Game + 'static  {
     let drv = frenderer::Driver::new(
         winit::window::WindowBuilder::new()
             .with_title("test")
@@ -120,10 +139,25 @@ pub fn main_loop(frend: &mut Immediate, cache: &AssetCache) {
     drv.run_event_loop::<(), _>(
         move |window, frend| {
             let mut frend = Immediate::new(frend);
-            let game = Game::new(&mut frend, &cache, &mut world);
-            (window, game, frend)
+            let mut world = World {
+                camera: Camera2D {
+                    screen_pos: [0.0, 0.0],
+                    screen_size: [220 as f32, 140 as f32],
+                },
+                current_level: 0,
+                levels: vec![],
+                enemies: vec![],
+                player: Pos {
+                    pos: Vec2 {x: 0.0, y: 0.0},
+                    dir: Dir::S,
+                },
+                paused: false,
+                game_end: false,
+            };
+            let game = G::new(&mut frend, cache, &mut world);
+            (window, game, world, frend)
         },
-        move |event, target, (window, ref mut game, ref mut frend)| {
+        move |event, target, (window, ref mut game, ref mut world, ref mut frend)| {
             use winit::event::{Event, WindowEvent};
             match event {
                 Event::WindowEvent {
@@ -154,10 +188,10 @@ pub fn main_loop(frend: &mut Immediate, cache: &AssetCache) {
                     while acc >= DT {
                         // simulate a frame
                         acc -= DT;
-                        game.update(&world);
+                        game.update(world, &input);
                         input.next_frame();
                     }
-                    game.render(frend);
+                    game.render(&world, frend);
                     frend.render();
                     window.request_redraw();
                 }
@@ -168,5 +202,5 @@ pub fn main_loop(frend: &mut Immediate, cache: &AssetCache) {
         },
     )
     .expect("event loop error");
-    //to here
+    
 }
