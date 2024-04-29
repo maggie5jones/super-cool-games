@@ -138,7 +138,7 @@ impl AdventureGame {
             world.spawn_enemies();
         }
 
-        if self.xp == LEVELUP {
+        if self.xp >= LEVELUP {
             // upgrade menu showing up is a bit buggy but seems to work :)
             self.upgrade = true;
             world.pause();
@@ -540,7 +540,7 @@ impl engine::Game for AdventureGame {
                     rot: 0.0,
                 };
                 frend.draw_sprite(
-                    1, // TODO: i think this group needs to change (might change others too)
+                    0, // TODO: i think this group needs to change (might change others too)
                     Transform {
                         x: atk_pos.x as f32 * TILE_SZ as f32,
                         ..atk_pos
