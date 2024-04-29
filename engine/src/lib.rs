@@ -119,7 +119,7 @@ impl World {
 
 pub trait Game {
     fn update(&mut self, world: &mut World, input: &Input);
-    fn render(&mut self, world: &World, frend: &mut Immediate);
+    fn render(&mut self, world: &mut World, frend: &mut Immediate);
     fn new(renderer: &mut Immediate, cache: AssetCache, world: &mut World) -> Self;
 }
 

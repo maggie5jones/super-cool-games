@@ -18,13 +18,6 @@ const PLAYER: [SheetRegion; 4] = [
     SheetRegion::rect(461 + 16 * 3, 39, 16, 16),
     SheetRegion::rect(461 + 16, 39, 16, 16),
 ];
-const _PLAYER_ATK: [SheetRegion; 4] = [
-    //n, e, s, w
-    SheetRegion::rect(428, 0, 16, 8), // offset by 8px in direction
-    SheetRegion::rect(349, 22, 8, 16),
-    SheetRegion::rect(162, 13, 16, 8),
-    SheetRegion::rect(549, 17, 8, 16),
-];
 const ENEMY: [SheetRegion; 4] = [
     SheetRegion::rect(533 + 16 * 2, 39, 16, 16),
     SheetRegion::rect(533 + 16, 39, 16, 16),
@@ -113,11 +106,6 @@ impl AdventureGame {
             rot: 0.0,
         };
         for i in 0..self.health {
-            // sprite_posns[k] = Transform {
-            //     x: heart_pos.x + i as f32 * TILE_SZ as f32,
-            //     ..heart_pos
-            // };
-            // sprite_gfx[k] = HEART.with_depth(0);
             frend.draw_sprite(
                 1,
                 Transform {
@@ -172,8 +160,6 @@ impl AdventureGame {
             world.pause();
         }
         if world.paused || world.game_end {
-            // stop generating enemies when paused/game ends
-            // self.simulate_pause(input, dt)
             return;
         }
 
@@ -188,11 +174,7 @@ impl AdventureGame {
         let dy = input.key_axis(Key::ArrowDown, Key::ArrowUp) * PLAYER_SPEED * DT;
         let attacking = !self.attack_area.is_empty();
         let _knockback = self.knockback_timer > 0.0;
-        if attacking {
-            // while attacking we can't move
-            // dx = 0.0;
-            // dy = 0.0;
-        } else {
+        if !attacking {
             // not attacking, no knockback, do normal movement
             if dx > 0.0 {
                 world.player.dir = Dir::E;
@@ -362,7 +344,7 @@ impl engine::Game for AdventureGame {
     fn update(&mut self, world: &mut engine::World, input: &Input) {
         self.simulate(world, input, DT);
     }
-    fn render(&mut self, world: &engine::World, frend: &mut Immediate) {
+    fn render(&mut self, world: &mut engine::World, frend: &mut Immediate) {
         // make this exactly as big as we need
         frend.sprite_group_set_camera(0, world.camera);
 
