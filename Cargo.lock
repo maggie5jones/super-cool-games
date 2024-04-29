@@ -1775,6 +1775,15 @@ dependencies = [
 [[package]]
 name = "sim-game"
 version = "0.1.0"
+dependencies = [
+ "assets_manager",
+ "engine",
+ "frenderer",
+ "getrandom",
+ "image",
+ "rand 0.8.5",
+ "winit",
+]
 
 [[package]]
 name = "simd-adler32"
