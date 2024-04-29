@@ -504,17 +504,48 @@ impl engine::Game for AdventureGame {
                     0,
                     (TILE_SZ / 2) as f32,
                 );
-                text = ":Q"; //TODO: update the positions of these and add heart for health upgrade and sword for attack radius upgrade
+                let heart_pos = Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: (W / 2) as f32 - 3.5 * TILE_SZ as f32,
+                    y: (H / 2) as f32,
+                    rot: 0.0,
+                };
+                frend.draw_sprite(
+                    1,
+                    Transform {
+                        x: heart_pos.x as f32 * TILE_SZ as f32,
+                        ..heart_pos
+                    },
+                    HEART.with_depth(1),
+                );
+                text = ":Q";
                 frend.draw_text(
                     1,
                     &font,
                     text,
                     [
-                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
-                        (H / 2) as f32 + TILE_SZ as f32,
+                        (W / 2) as f32 - 3.5 * TILE_SZ as f32 + 10.0,
+                        (H / 2) as f32,
                     ],
                     0,
                     (TILE_SZ / 2) as f32,
+                );
+                
+                let atk_pos = Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: (W / 2) as f32 - 3.5 * TILE_SZ as f32,
+                    y: (H / 2) as f32 - TILE_SZ as f32,
+                    rot: 0.0,
+                };
+                frend.draw_sprite(
+                    1, // TODO: i think this group needs to change (might change others too)
+                    Transform {
+                        x: atk_pos.x as f32 * TILE_SZ as f32,
+                        ..atk_pos
+                    },
+                    ATK.with_depth(1),
                 );
                 text = ":E";
                 frend.draw_text(
@@ -522,8 +553,8 @@ impl engine::Game for AdventureGame {
                     &font,
                     text,
                     [
-                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
-                        (H / 2) as f32 + TILE_SZ as f32,
+                        (W / 2) as f32 - 3.5 * TILE_SZ as f32 + 10.0,
+                        (H / 2) as f32 - TILE_SZ as f32,
                     ],
                     0,
                     (TILE_SZ / 2) as f32,
