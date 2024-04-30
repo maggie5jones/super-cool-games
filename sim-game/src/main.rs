@@ -9,7 +9,6 @@ use frenderer::{
     sprites::{Camera2D, SheetRegion, Transform},
     wgpu, Immediate,
 };
-use rand::Rng;
 
 const PLAYER: SheetRegion = SheetRegion::rect(68, 17, 16, 16);
 const ENEMY: SheetRegion = SheetRegion::rect(0, 0, 16, 16);
@@ -137,7 +136,6 @@ impl SimGame {
         if !world.level().get_tile_at(dest).unwrap().solid {
             world.player.pos = dest;
         }
-        // let mut rng = rand::thread_rng();
         for enemy in world.enemies.iter_mut() {
             let player_pos = world.player.pos;
             let enemy_pos = enemy.0.pos;
@@ -146,25 +144,6 @@ impl SimGame {
             direction.y = player_pos.y - enemy_pos.y;
             let normalized_direction = direction.normalize();
             enemy.0.pos += normalized_direction * ENEMY_SPEED * dt;
-            
-            // if rng.gen_bool(0.05) {
-            //     enemy.0.dir = match rng.gen_range(0..4) {
-            //         0 => Dir::N,
-            //         1 => Dir::E,
-            //         2 => Dir::S,
-            //         3 => Dir::W,
-            //         _ => panic!(),
-            //     };
-            // }
-            // let enemy_dest = enemy.0.pos + (enemy.0.dir.to_vec2() * ENEMY_SPEED * dt);
-            // if (enemy_dest.x >= 0.0
-            //     && enemy_dest.x <= (world.levels[world.current_level].width() * TILE_SZ) as f32)
-            //     && (enemy_dest.y > 0.0
-            //         && enemy_dest.y
-            //             <= (world.levels[world.current_level].height() * TILE_SZ) as f32)
-            // {
-            //     enemy.0.pos = enemy_dest;
-            // }
         }
 
         let lw = world.level().width();
