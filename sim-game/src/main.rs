@@ -11,23 +11,11 @@ use frenderer::{
 };
 use rand::Rng;
 
-const PLAYER: [SheetRegion; 4] = [
-    //n, e, s, w
-    SheetRegion::rect(461 + 16 * 2, 39, 16, 16),
-    SheetRegion::rect(461, 39, 16, 16),
-    SheetRegion::rect(461 + 16 * 3, 39, 16, 16),
-    SheetRegion::rect(461 + 16, 39, 16, 16),
-];
-const ENEMY: [SheetRegion; 4] = [
-    SheetRegion::rect(533 + 16 * 2, 39, 16, 16),
-    SheetRegion::rect(533 + 16, 39, 16, 16),
-    SheetRegion::rect(533, 39, 16, 16),
-    SheetRegion::rect(533 + 16 * 3, 39, 16, 16),
-];
-const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
-const EXPERIENCE: SheetRegion = SheetRegion::rect(525, 50, 8, 8);
+const PLAYER: SheetRegion = SheetRegion::rect(68, 17, 16, 16);
+const ENEMY: SheetRegion = SheetRegion::rect(0, 0, 16, 16);
 
-const ATK: SheetRegion = SheetRegion::rect(525, 19, 8, 8);
+const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
+const ATK: SheetRegion = SheetRegion::rect(152, 137, 8, 8);
 const BLANK: SheetRegion = SheetRegion::rect(600, 600, 16, 16);
 
 const TILE_SZ: usize = 16;
@@ -38,11 +26,6 @@ const SCREEN_FAST_MARGIN: f32 = 64.0;
 // pixels per second
 const PLAYER_SPEED: f32 = 64.0;
 const ENEMY_SPEED: f32 = 32.0;
-const _KNOCKBACK_SPEED: f32 = 128.0;
-
-const ATTACK_MAX_TIME: f32 = 0.3;
-const ATTACK_COOLDOWN_TIME: f32 = 0.1;
-const KNOCKBACK_TIME: f32 = 1.0;
 
 const DT: f32 = 1.0 / 60.0;
 
@@ -57,6 +40,7 @@ fn main() {
     engine::main_loop::<SimGame>(cache, 516.0, 240.0);
 }
 struct SimGame {
+    pub health: u8,
     pub attack_area: Rect,
     pub attack_range: f32,
     pub attack_timer: f32,
@@ -66,6 +50,7 @@ struct SimGame {
 impl SimGame {
     fn new(world: &mut World) -> Self {
         let game = SimGame {
+            health: 10,
             attack_area: Rect {
                 x: 0.0,
                 y: 0.0,
@@ -87,8 +72,6 @@ impl SimGame {
     }
 
     fn draw_hud(&self, frend: &mut Immediate) {
-        // render an upgrade menu
-
         // draw UI with health and experience
         let heart_pos = Transform {
             w: TILE_SZ as u16,
@@ -97,6 +80,16 @@ impl SimGame {
             y: 6.0,
             rot: 0.0,
         };
+        for i in 0..self.health {
+            frend.draw_sprite(
+                1,
+                Transform {
+                    x: heart_pos.x + i as f32 * TILE_SZ as f32,
+                    ..heart_pos
+                },
+                HEART.with_depth(1),
+            );
+        }
     }
     fn simulate(&mut self, world: &mut World, input: &Input, dt: f32) {
 
@@ -144,26 +137,34 @@ impl SimGame {
         if !world.level().get_tile_at(dest).unwrap().solid {
             world.player.pos = dest;
         }
-        let mut rng = rand::thread_rng();
+        // let mut rng = rand::thread_rng();
         for enemy in world.enemies.iter_mut() {
-            if rng.gen_bool(0.05) {
-                enemy.0.dir = match rng.gen_range(0..4) {
-                    0 => Dir::N,
-                    1 => Dir::E,
-                    2 => Dir::S,
-                    3 => Dir::W,
-                    _ => panic!(),
-                };
-            }
-            let enemy_dest = enemy.0.pos + (enemy.0.dir.to_vec2() * ENEMY_SPEED * dt);
-            if (enemy_dest.x >= 0.0
-                && enemy_dest.x <= (world.levels[world.current_level].width() * TILE_SZ) as f32)
-                && (enemy_dest.y > 0.0
-                    && enemy_dest.y
-                        <= (world.levels[world.current_level].height() * TILE_SZ) as f32)
-            {
-                enemy.0.pos = enemy_dest;
-            }
+            let player_pos = world.player.pos;
+            let enemy_pos = enemy.0.pos;
+            let mut direction = Vec2 { x: 0.0, y: 0.0 };
+            direction.x  = player_pos.x - enemy_pos.x;
+            direction.y = player_pos.y - enemy_pos.y;
+            let normalized_direction = direction.normalize();
+            enemy.0.pos += normalized_direction * ENEMY_SPEED * dt;
+            
+            // if rng.gen_bool(0.05) {
+            //     enemy.0.dir = match rng.gen_range(0..4) {
+            //         0 => Dir::N,
+            //         1 => Dir::E,
+            //         2 => Dir::S,
+            //         3 => Dir::W,
+            //         _ => panic!(),
+            //     };
+            // }
+            // let enemy_dest = enemy.0.pos + (enemy.0.dir.to_vec2() * ENEMY_SPEED * dt);
+            // if (enemy_dest.x >= 0.0
+            //     && enemy_dest.x <= (world.levels[world.current_level].width() * TILE_SZ) as f32)
+            //     && (enemy_dest.y > 0.0
+            //         && enemy_dest.y
+            //             <= (world.levels[world.current_level].height() * TILE_SZ) as f32)
+            // {
+            //     enemy.0.pos = enemy_dest;
+            // }
         }
 
         let lw = world.level().width();
@@ -277,7 +278,7 @@ impl engine::Game for SimGame {
                         y: enemy.0.pos.y,
                         rot: 0.0,
                     },
-                    ENEMY[enemy.0.dir as usize].with_depth(3),
+                    ENEMY.with_depth(3),
                 );
             } else {
                 frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
@@ -286,6 +287,32 @@ impl engine::Game for SimGame {
 
         // draw pause menu & HUD
         self.draw_hud(frend);
+
+        if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: world.player.pos.x,
+                    y: world.player.pos.y,
+                    rot: 0.0,
+                },
+                SheetRegion::ZERO,
+            );
+        } else {
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: world.player.pos.x,
+                    y: world.player.pos.y,
+                    rot: 0.0,
+                },
+                PLAYER.with_depth(2),
+            );
+        }
 
         if world.game_end {
             // player disappears when game ends (no more health)

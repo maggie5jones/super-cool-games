@@ -68,4 +68,12 @@ impl Vec2 {
     pub fn mag_sq(&self) -> f32 {
         self.x * self.x + self.y * self.y
     }
+
+    pub fn normalize(&self) -> Vec2 {
+        let mag = self.mag_sq().sqrt();
+        Vec2 {
+            x: self.x / mag,
+            y: self.y / mag,
+        }
+    }
 }
