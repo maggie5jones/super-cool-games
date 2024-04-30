@@ -10,13 +10,8 @@ use engine::{geom::*, World};
 use stopwatch::Stopwatch;
 use std::io;
 
-const PLAYER: [SheetRegion; 4] = [
-    //n, e, s, w
-    SheetRegion::rect(461 + 16 * 2, 39, 16, 16),
-    SheetRegion::rect(461, 39, 16, 16),
-    SheetRegion::rect(461 + 16 * 3, 39, 16, 16),
-    SheetRegion::rect(461 + 16, 39, 16, 16),
-];
+const PLAYER: SheetRegion = SheetRegion::rect(0, 579, 16, 16);
+
 const TILE_SZ: usize = 16;
 const W: usize = 220; // 320
 const H: usize = 140; // 240
@@ -71,7 +66,7 @@ impl MazeGame {
 
         let font = frenderer::bitfont::BitFont::with_sheet_region(
             ' '..='ÿ', 
-            SheetRegion::new(0, 0, 143, 0, 288, 70).with_depth(0), 
+            SheetRegion::new(0, 0, 800, 0, 288, 70).with_depth(0), 
             (8) as u16, 
             (8) as u16, 
             (1) as u16, 
@@ -151,7 +146,7 @@ impl MazeGame {
 
         let font = frenderer::bitfont::BitFont::with_sheet_region(
             ' '..='ÿ', 
-            SheetRegion::new(0, 0, 143, 0, 288, 70).with_depth(0), 
+            SheetRegion::new(0, 0, 800, 0, 288, 70).with_depth(0), 
             (8) as u16, 
             (8) as u16, 
             (1) as u16, 
@@ -290,7 +285,7 @@ impl engine::Game for MazeGame {
                 y: world.player.pos.y,
                 rot: 0.0,
             },
-            PLAYER[world.player.dir as usize].with_depth(2),
+            PLAYER.with_depth(2),
         );
 
         if world.game_end {
@@ -313,24 +308,24 @@ impl engine::Game for MazeGame {
                 frenderer::nineslice::CornerSlice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(628, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(0, 425, 16, 16).with_depth(1),
                 },
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(0, 442, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 },
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(17, 425, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 },
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(17, 442, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 },
             );
@@ -348,7 +343,7 @@ impl engine::Game for MazeGame {
 
             let font = frenderer::bitfont::BitFont::with_sheet_region(
                 ' '..='ÿ',
-                SheetRegion::new(0, 0, 143, 0, 288, 70).with_depth(0),
+                SheetRegion::new(0, 0, 800, 0, 288, 70).with_depth(0),
                 8_u16,
                 8_u16,
                 1_u16,
@@ -384,7 +379,7 @@ impl engine::Game for MazeGame {
     }
     fn new(renderer: &mut Immediate, cache: AssetCache, world: &mut engine::World) -> Self {
         let tile_handle = cache
-            .load::<Png>("texture")
+            .load::<Png>("tilesheet")
             .expect("Couldn't load tilesheet img");
         let tile_img = tile_handle.read().0.to_rgba8();
         let tile_tex = renderer.create_array_texture(
