@@ -73,10 +73,6 @@ impl World {
         }
     }
     pub fn spawn_enemies(&mut self) {
-        // if self.paused || self.game_end { // stop generating enemies when paused/game ends
-        //     return;
-        // } // we can probably deal with this condition in game not engine
-
         let mut rng = rand::thread_rng();
         let rand = rng.gen_range(0..1000);
         if rand > 960 {
@@ -95,10 +91,6 @@ impl World {
         }
     }
     pub fn spawn_players(&mut self) {
-        // if self.paused || self.game_end { // stop generating enemies when paused/game ends
-        //     return;
-        // } // we can probably deal with this condition in game not engine
-
         let mut rng = rand::thread_rng();
         let rand = rng.gen_range(0..1000);
         if rand > 960 {
@@ -146,12 +138,12 @@ pub trait Game {
 }
 
 
-pub fn main_loop<G:Game> (cache: AssetCache) where G: Game + 'static  {
+pub fn main_loop<G:Game> (cache: AssetCache, size_x: f32, size_y: f32) where G: Game + 'static  {
     let drv = frenderer::Driver::new(
         winit::window::WindowBuilder::new()
             .with_title("test")
             .with_inner_size(winit::dpi::LogicalSize::new(1024.0, 768.0)),
-        Some((220, 140)),
+        Some((size_x as u32, size_y as u32)),
     );
 
     let mut input = Input::default();
@@ -164,7 +156,7 @@ pub fn main_loop<G:Game> (cache: AssetCache) where G: Game + 'static  {
             let mut world = World {
                 camera: Camera2D {
                     screen_pos: [0.0, 0.0],
-                    screen_size: [220.0, 140.0],
+                    screen_size: [size_x, size_y],
                 },
                 current_level: 0,
                 levels: vec![],

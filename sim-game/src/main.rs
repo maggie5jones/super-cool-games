@@ -31,8 +31,8 @@ const ATK: SheetRegion = SheetRegion::rect(525, 19, 8, 8);
 const BLANK: SheetRegion = SheetRegion::rect(600, 600, 16, 16);
 
 const TILE_SZ: usize = 16;
-const W: usize = 220; // 320
-const H: usize = 140; // 240
+const W: usize = 516; // 320
+const H: usize = 240; // 240
 const SCREEN_FAST_MARGIN: f32 = 64.0;
 
 // pixels per second
@@ -46,8 +46,6 @@ const KNOCKBACK_TIME: f32 = 1.0;
 
 const DT: f32 = 1.0 / 60.0;
 
-const LEVELUP: u8 = 5;
-
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     let source =
@@ -56,7 +54,7 @@ fn main() {
     let source = assets_manager::source::Embedded::from(assets_manager::source::embed!("content"));
     let cache = assets_manager::AssetCache::with_source(source);
 
-    engine::main_loop::<SimGame>(cache);
+    engine::main_loop::<SimGame>(cache, 516.0, 240.0);
 }
 struct SimGame {
     pub attack_area: Rect,
@@ -413,7 +411,7 @@ impl engine::Game for SimGame {
     }
     fn new(renderer: &mut Immediate, cache: AssetCache, world: &mut engine::World) -> Self {
         let tile_handle = cache
-            .load::<Png>("texture")
+            .load::<Png>("tilemap")
             .expect("Couldn't load tilesheet img");
         let tile_img = tile_handle.read().0.to_rgba8();
         let tile_tex = renderer.create_array_texture(
@@ -452,7 +450,7 @@ impl engine::Game for SimGame {
         let current_level = 0;
         let camera = Camera2D {
             screen_pos: [0.0, 0.0],
-            screen_size: [512 as f32, 240 as f32],
+            screen_size: [W as f32, H as f32], // 512x240
         };
         let sprite_estimate =
             levels[current_level].sprite_count() + levels[current_level].starts().len();

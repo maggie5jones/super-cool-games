@@ -36,7 +36,7 @@ fn main() {
     let source = assets_manager::source::Embedded::from(assets_manager::source::embed!("content"));
     let cache = assets_manager::AssetCache::with_source(source);
 
-    engine::main_loop::<MazeGame>(cache);
+    engine::main_loop::<MazeGame>(cache, 220.0, 140.0);
 }
 
 struct MazeGame {
