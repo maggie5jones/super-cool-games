@@ -95,26 +95,27 @@ impl MazeGame {
             frenderer::nineslice::CornerSlice {
                 w: 16.0,
                 h: 16.0,
-                region: SheetRegion::rect(628, 55, 16, 16).with_depth(1),
-            }, 
+                region: SheetRegion::rect(0, 425, 16, 16).with_depth(1),
+            },
             frenderer::nineslice::Slice {
                 w: 16.0,
                 h: 16.0,
-                region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
+                region: SheetRegion::rect(0, 442, 16, 16).with_depth(1),
                 repeat: frenderer::nineslice::Repeat::Tile,
-            }, 
+            },
             frenderer::nineslice::Slice {
                 w: 16.0,
                 h: 16.0,
-                region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
+                region: SheetRegion::rect(17, 425, 16, 16).with_depth(1),
                 repeat: frenderer::nineslice::Repeat::Tile,
-            }, 
+            },
             frenderer::nineslice::Slice {
                 w: 16.0,
                 h: 16.0,
-                region: SheetRegion::rect(679, 55, 16, 16).with_depth(1),
+                region: SheetRegion::rect(17, 442, 16, 16).with_depth(1),
                 repeat: frenderer::nineslice::Repeat::Tile,
-            });
+            },
+        );
 
         let pause_x = W as f32/2.0 - 4.0*TILE_SZ as f32; 
         let pause_y = H as f32/2.0 - 3.0*TILE_SZ as f32; 
@@ -198,7 +199,7 @@ impl MazeGame {
             world.player.dir = Dir::S;
         }
         let dest = world.player.pos + Vec2 { x: dx, y: dy };
-        if !world.level().get_tile_at(dest).unwrap().solid {
+        if !world.level().get_tile_at(dest).unwrap().solid { // switch to map whether it is solid then use unwrap or default
             world.player.pos = dest;
         }
 
