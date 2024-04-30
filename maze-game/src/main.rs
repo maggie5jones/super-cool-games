@@ -153,7 +153,7 @@ impl MazeGame {
             (1) as u16, 
             (2) as u16);
                 
-        frend.draw_text(1, &font, "leaderboard", [(W/2) as f32 - 3.0*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
+        frend.draw_text(1, &font, "leaderboard", [(W/2) as f32 - 3.0*TILE_SZ as f32, (H/2) as f32], 0, (TILE_SZ/2) as f32);
 
         let max;
         if self.leaderboard.len() > 3 {
