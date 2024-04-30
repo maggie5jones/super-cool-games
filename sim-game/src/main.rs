@@ -56,21 +56,18 @@ fn main() {
     let source = assets_manager::source::Embedded::from(assets_manager::source::embed!("content"));
     let cache = assets_manager::AssetCache::with_source(source);
 
-    engine::main_loop::<AdventureGame>(cache);
+    engine::main_loop::<SimGame>(cache);
 }
-struct AdventureGame {
+struct SimGame {
     pub attack_area: Rect,
     pub attack_range: f32,
     pub attack_timer: f32,
     pub knockback_timer: f32,
-    pub health: u8,
-    pub xp: u8,
-    pub upgrade: bool,
 }
 
-impl AdventureGame {
+impl SimGame {
     fn new(world: &mut World) -> Self {
-        let game = AdventureGame {
+        let game = SimGame {
             attack_area: Rect {
                 x: 0.0,
                 y: 0.0,
@@ -80,9 +77,6 @@ impl AdventureGame {
             knockback_timer: 0.0,
             attack_timer: 0.0,
             attack_range: 3.0,
-            health: 3,
-            xp: 0,
-            upgrade: false,
         };
         let player_start = *world.levels[world.current_level]
             .starts()
@@ -105,56 +99,15 @@ impl AdventureGame {
             y: 6.0,
             rot: 0.0,
         };
-        for i in 0..self.health {
-            frend.draw_sprite(
-                1,
-                Transform {
-                    x: heart_pos.x + i as f32 * TILE_SZ as f32,
-                    ..heart_pos
-                },
-                HEART.with_depth(1),
-            );
-        }
-        let exp_pos = Transform {
-            w: TILE_SZ as u16,
-            h: TILE_SZ as u16,
-            x: W as f32 - 10.0,
-            y: H as f32 - 10.0,
-            rot: 0.0,
-        };
-        for i in 0..self.xp {
-            frend.draw_sprite(
-                1,
-                Transform {
-                    x: exp_pos.x - i as f32 * 12_f32,
-                    ..exp_pos
-                },
-                EXPERIENCE.with_depth(1),
-            );
-        }
     }
     fn simulate(&mut self, world: &mut World, input: &Input, dt: f32) {
-        if !world.paused {
-            world.spawn_enemies();
-        }
 
-        if self.xp == LEVELUP {
-            // upgrade menu showing up is a bit buggy but seems to work :)
-            self.upgrade = true;
-            world.pause();
-            self.xp = 0;
+        if input.is_key_down(Key::KeyQ) {
+            world.spawn_enemies()
         }
-        if self.upgrade {
-            if input.is_key_pressed(Key::KeyQ) {
-                world.pause();
-                self.upgrade = false;
-                self.health += 2;
-            }
-            if input.is_key_pressed(Key::KeyE) {
-                world.pause();
-                self.upgrade = false;
-                self.attack_range += 0.5;
-            }
+        if input.is_key_down(Key::KeyE) {
+            world.spawn_enemies()
+            
         }
         if input.is_key_pressed(Key::Escape) {
             world.pause();
@@ -188,25 +141,6 @@ impl AdventureGame {
             if dy < 0.0 {
                 world.player.dir = Dir::S;
             }
-        }
-        if self.attack_timer <= 0.0 && input.is_key_pressed(Key::Space) {
-            // compute the attack area's center based on the player's position and facing and some offset
-            // For the spritesheet provided, the attack is placed 8px "forwards" from the player.
-            self.attack_timer = ATTACK_MAX_TIME;
-            self.attack_area = Rect {
-                x: world.player.pos.x - (TILE_SZ as f32 * (self.attack_range / 2.0)),
-                y: world.player.pos.y - (TILE_SZ as f32 * (self.attack_range / 2.0)),
-                w: self.attack_range as u16 * TILE_SZ as u16,
-                h: self.attack_range as u16 * TILE_SZ as u16,
-            }
-        } else if self.attack_timer <= ATTACK_COOLDOWN_TIME {
-            // "turn off" the attack, but the cooldown is still going
-            self.attack_area = Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 0,
-                h: 0,
-            };
         }
         let dest = world.player.pos + Vec2 { x: dx, y: dy };
         if !world.level().get_tile_at(dest).unwrap().solid {
@@ -314,22 +248,6 @@ impl AdventureGame {
                 world.enemies[contact.b_index].0.pos +=
                     find_displacement(p_rect, enemy_rect[contact.b_index]);
                 removable.push(contact.b_index);
-                self.xp += 1; // this might be wrong as it gives xp when an enemy dies in a wall
-                              // dbg!(self.xp);
-            }
-            if contact.a_index == 0 {
-                if self.knockback_timer == 0.0 {
-                    self.knockback_timer = KNOCKBACK_TIME;
-                    self.health -= 1;
-                    if self.health == 0 {
-                        world.game_end = true;
-                    }
-                } else if self.knockback_timer < KNOCKBACK_TIME {
-                    // "turn off" the ability to get hit
-                    if self.knockback_timer.abs() < 0.02 {
-                        self.knockback_timer = 0.0;
-                    }
-                }
             }
         }
         // Alternatively, you could "disable" an enemy by giving it an `alive` flag or similar and setting that to false, not drawing or updating dead enemies.
@@ -340,7 +258,7 @@ impl AdventureGame {
     }
 }
 
-impl engine::Game for AdventureGame {
+impl engine::Game for SimGame {
     fn update(&mut self, world: &mut engine::World, input: &Input) {
         self.simulate(world, input, DT);
     }
@@ -371,31 +289,6 @@ impl engine::Game for AdventureGame {
         // draw pause menu & HUD
         self.draw_hud(frend);
 
-        if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
-            frend.draw_sprite(
-                0,
-                Transform {
-                    w: TILE_SZ as u16,
-                    h: TILE_SZ as u16,
-                    x: world.player.pos.x,
-                    y: world.player.pos.y,
-                    rot: 0.0,
-                },
-                SheetRegion::ZERO,
-            );
-        } else {
-            frend.draw_sprite(
-                0,
-                Transform {
-                    w: TILE_SZ as u16,
-                    h: TILE_SZ as u16,
-                    x: world.player.pos.x,
-                    y: world.player.pos.y,
-                    rot: 0.0,
-                },
-                PLAYER[world.player.dir as usize].with_depth(2),
-            );
-        }
         if world.game_end {
             // player disappears when game ends (no more health)
             frend.draw_sprite(
@@ -491,69 +384,31 @@ impl engine::Game for AdventureGame {
                 2_u16,
             );
 
-            if self.upgrade {
-                let mut text = "upgrades time";
-                frend.draw_text(
-                    1,
-                    &font,
-                    text,
-                    [
-                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
-                        (H / 2) as f32 + TILE_SZ as f32,
-                    ],
-                    0,
-                    (TILE_SZ / 2) as f32,
-                );
-                text = ":Q"; //TODO: update the positions of these and add heart for health upgrade and sword for attack radius upgrade
-                frend.draw_text(
-                    1,
-                    &font,
-                    text,
-                    [
-                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
-                        (H / 2) as f32 + TILE_SZ as f32,
-                    ],
-                    0,
-                    (TILE_SZ / 2) as f32,
-                );
-                text = ":E";
-                frend.draw_text(
-                    1,
-                    &font,
-                    text,
-                    [
-                        (W / 2) as f32 - 3.5 * TILE_SZ as f32,
-                        (H / 2) as f32 + TILE_SZ as f32,
-                    ],
-                    0,
-                    (TILE_SZ / 2) as f32,
-                );
-            } else {
-                let mut text = "game paused!";
-                frend.draw_text(
-                    1,
-                    &font,
-                    text,
-                    [
-                        (W / 2) as f32 - 3.0 * TILE_SZ as f32,
-                        (H / 2) as f32 + TILE_SZ as f32,
-                    ],
-                    0,
-                    (TILE_SZ / 2) as f32,
-                );
-                text = "unpause: Esc";
-                frend.draw_text(
-                    1,
-                    &font,
-                    text,
-                    [
-                        (W / 2) as f32 - 3.25 * TILE_SZ as f32,
-                        (H / 2) as f32 - TILE_SZ as f32,
-                    ],
-                    0,
-                    (TILE_SZ / 2) as f32,
-                );
-            }
+            let mut text = "game paused!";
+            frend.draw_text(
+                1,
+                &font,
+                text,
+                [
+                    (W / 2) as f32 - 3.0 * TILE_SZ as f32,
+                    (H / 2) as f32 + TILE_SZ as f32,
+                ],
+                0,
+                (TILE_SZ / 2) as f32,
+            );
+            text = "unpause: Esc";
+            frend.draw_text(
+                1,
+                &font,
+                text,
+                [
+                    (W / 2) as f32 - 3.25 * TILE_SZ as f32,
+                    (H / 2) as f32 - TILE_SZ as f32,
+                ],
+                0,
+                (TILE_SZ / 2) as f32,
+            );
+        
         }
     }
     fn new(renderer: &mut Immediate, cache: AssetCache, world: &mut engine::World) -> Self {
@@ -597,7 +452,7 @@ impl engine::Game for AdventureGame {
         let current_level = 0;
         let camera = Camera2D {
             screen_pos: [0.0, 0.0],
-            screen_size: [W as f32, H as f32],
+            screen_size: [512 as f32, 240 as f32],
         };
         let sprite_estimate =
             levels[current_level].sprite_count() + levels[current_level].starts().len();
@@ -619,7 +474,7 @@ impl engine::Game for AdventureGame {
             pos: player_start,
             dir: Dir::S,
         });
-        AdventureGame::new(world)
+        SimGame::new(world)
     }
 }
 
