@@ -2,6 +2,7 @@ use assets_manager::{asset::Png, AssetCache};
 use engine::level::Level;
 use engine::Contact;
 use engine::Dir;
+use engine::Game;
 use engine::Pos;
 use engine::{geom::*, World};
 use frenderer::{
@@ -9,9 +10,12 @@ use frenderer::{
     sprites::{Camera2D, SheetRegion, Transform},
     wgpu, Immediate,
 };
+use rand::Rng;
 
-const PLAYER: SheetRegion = SheetRegion::rect(68, 17, 16, 16);
-const ENEMY: SheetRegion = SheetRegion::rect(0, 0, 16, 16);
+const PLAYER: SheetRegion = SheetRegion::rect(51, 0, 16, 16);
+const KNIGHT1: SheetRegion = SheetRegion::rect(119, 17, 16, 16);
+const HAND: SheetRegion = SheetRegion::rect(102, 0, 16, 16);
+const ENEMY: SheetRegion = SheetRegion::rect(17, 0, 16, 16);
 
 const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
 const ATK: SheetRegion = SheetRegion::rect(152, 137, 8, 8);
@@ -39,26 +43,34 @@ fn main() {
     engine::main_loop::<SimGame>(cache, 516.0, 240.0);
 }
 struct SimGame {
+    pub humans: Vec<Knight>,
+}
+
+struct Knight {
     pub health: u8,
     pub attack_area: Rect,
     pub attack_range: f32,
     pub attack_timer: f32,
     pub knockback_timer: f32,
+    pub pos: Vec2,
+}
+
+impl Knight {
+    fn find_enemy(&mut self, world: &mut World) -> Vec2 {
+        let mut closest = Vec2 {x: W as f32, y: H as f32,};
+        for enemy in world.enemies.iter_mut() {
+            if self.pos.mag_sq().sqrt() - enemy.0.pos.mag_sq().sqrt() < closest.mag_sq().sqrt() {
+                closest = enemy.0.pos;
+            }
+        }
+        closest
+    }
 }
 
 impl SimGame {
     fn new(world: &mut World) -> Self {
         let game = SimGame {
-            health: 10,
-            attack_area: Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 0,
-                h: 0,
-            },
-            knockback_timer: 0.0,
-            attack_timer: 0.0,
-            attack_range: 3.0,
+            humans: vec![],
         };
         let player_start = *world.levels[world.current_level]
             .starts()
@@ -72,31 +84,14 @@ impl SimGame {
 
     fn draw_hud(&self, frend: &mut Immediate) {
         // draw UI with health and experience
-        let heart_pos = Transform {
-            w: TILE_SZ as u16,
-            h: TILE_SZ as u16,
-            x: 10.0,
-            y: 6.0,
-            rot: 0.0,
-        };
-        for i in 0..self.health {
-            frend.draw_sprite(
-                1,
-                Transform {
-                    x: heart_pos.x + i as f32 * TILE_SZ as f32,
-                    ..heart_pos
-                },
-                HEART.with_depth(1),
-            );
-        }
     }
     fn simulate(&mut self, world: &mut World, input: &Input, dt: f32) {
 
         if input.is_key_down(Key::KeyQ) {
-            world.spawn_enemies()
+            world.spawn_enemies();
         }
         if input.is_key_down(Key::KeyE) {
-            world.spawn_enemies()
+            spawn_humans(world, self);
             
         }
         if input.is_key_pressed(Key::Escape) {
@@ -106,44 +101,67 @@ impl SimGame {
             return;
         }
 
-        if self.attack_timer > 0.0 {
-            self.attack_timer -= dt;
-        }
-        if self.knockback_timer > 0.0 {
-            self.knockback_timer -= dt;
-        }
         let dx = input.key_axis(Key::ArrowLeft, Key::ArrowRight) * PLAYER_SPEED * DT;
         // now down means -y and up means +y!  beware!
         let dy = input.key_axis(Key::ArrowDown, Key::ArrowUp) * PLAYER_SPEED * DT;
-        let attacking = !self.attack_area.is_empty();
-        let _knockback = self.knockback_timer > 0.0;
-        if !attacking {
-            // not attacking, no knockback, do normal movement
-            if dx > 0.0 {
-                world.player.dir = Dir::E;
-            }
-            if dx < 0.0 {
-                world.player.dir = Dir::W;
-            }
-            if dy > 0.0 {
-                world.player.dir = Dir::N;
-            }
-            if dy < 0.0 {
-                world.player.dir = Dir::S;
-            }
-        }
         let dest = world.player.pos + Vec2 { x: dx, y: dy };
         if !world.level().get_tile_at(dest).unwrap().solid {
             world.player.pos = dest;
         }
+
+        
+        // for enemy in world.enemies.iter_mut() {
+        //     let player_pos = world.player.pos;
+        //     let enemy_pos = enemy.0.pos;
+        //     let mut direction = Vec2 { x: 0.0, y: 0.0 };
+        //     direction.x  = player_pos.x - enemy_pos.x;
+        //     direction.y = player_pos.y - enemy_pos.y;
+        //     let normalized_direction = direction.normalize();
+        //     enemy.0.pos += normalized_direction * ENEMY_SPEED * dt;
+        // }
+        let mut rng = rand::thread_rng();
         for enemy in world.enemies.iter_mut() {
-            let player_pos = world.player.pos;
-            let enemy_pos = enemy.0.pos;
+            if rng.gen_bool(0.05) {
+                enemy.0.dir = match rng.gen_range(0..4) {
+                    0 => Dir::N,
+                    1 => Dir::E,
+                    2 => Dir::S,
+                    3 => Dir::W,
+                    _ => panic!(),
+                };
+            }
+            let enemy_dest = enemy.0.pos + (enemy.0.dir.to_vec2() * ENEMY_SPEED * dt);
+            if (enemy_dest.x >= 0.0
+                && enemy_dest.x <= (world.levels[world.current_level].width() * TILE_SZ) as f32)
+                && (enemy_dest.y > 0.0
+                    && enemy_dest.y
+                        <= (world.levels[world.current_level].height() * TILE_SZ) as f32)
+            {
+                enemy.0.pos = enemy_dest;
+            }
+        }
+
+        for human in self.humans.iter_mut() {
+            if human.attack_timer > 0.0 {
+                human.attack_timer -= dt;
+            }
+            if human.knockback_timer > 0.0 {
+                human.knockback_timer -= dt;
+            }
+            
+            let attacking = !human.attack_area.is_empty();
+            let _knockback = human.knockback_timer > 0.0;
+            if attacking {
+                human.find_enemy(world);
+            }
+
+            let monster_pos = human.find_enemy(world);
+            let human_pos = human.pos;
             let mut direction = Vec2 { x: 0.0, y: 0.0 };
-            direction.x  = player_pos.x - enemy_pos.x;
-            direction.y = player_pos.y - enemy_pos.y;
+            direction.x  = monster_pos.x - human_pos.x;
+            direction.y = monster_pos.y - human_pos.y;
             let normalized_direction = direction.normalize();
-            enemy.0.pos += normalized_direction * ENEMY_SPEED * dt;
+            human.pos += normalized_direction * ENEMY_SPEED * dt;
         }
 
         let lw = world.level().width();
@@ -177,7 +195,7 @@ impl SimGame {
             w: (TILE_SZ) as u16,
             h: (TILE_SZ) as u16,
         };
-        let player = [p_rect, self.attack_area];
+        let player = [p_rect];
         let enemy_rect: Vec<_> = world.enemies.iter().map(|e| make_rect(e.0.pos)).collect();
         generate_contact(&player, &enemy_rect, &mut contacts);
 
@@ -246,6 +264,18 @@ impl engine::Game for SimGame {
 
         world.level().render_immediate(frend);
 
+        frend.draw_sprite(
+            0,
+            Transform {
+                w: TILE_SZ as u16,
+                h: TILE_SZ as u16,
+                x: world.player.pos.x,
+                y: world.player.pos.y,
+                rot: 0.0,
+            },
+            PLAYER.with_depth(1),
+        );
+
         for enemy in world.enemies.iter() {
             if enemy.1 == 1 {
                 frend.draw_sprite(
@@ -264,34 +294,79 @@ impl engine::Game for SimGame {
             }
         }
 
+        for knight in self.humans.iter() {
+            if knight.knockback_timer > 0.0 && knight.knockback_timer % 0.5 < 0.25 {
+                frend.draw_sprite(
+                    0,
+                    Transform {
+                        w: TILE_SZ as u16,
+                        h: TILE_SZ as u16,
+                        x: knight.pos.x,
+                        y: knight.pos.y,
+                        rot: 0.0,
+                    },
+                    SheetRegion::ZERO,
+                );
+            } else {
+                frend.draw_sprite(
+                    0,
+                    Transform {
+                        w: TILE_SZ as u16,
+                        h: TILE_SZ as u16,
+                        x: knight.pos.x,
+                        y: knight.pos.y,
+                        rot: 0.0,
+                    },
+                    KNIGHT1.with_depth(2),
+                );
+            }
+            if knight.attack_timer != 0.0 {
+                frend.draw_sprite(
+                    0,
+                    Transform {
+                        w: TILE_SZ as u16,
+                        h: TILE_SZ as u16,
+                        x: knight.pos.x,
+                        y: knight.pos.y,
+                        rot: 0.0,
+                    },
+                    KNIGHT1.with_depth(2),
+                );
+            } else {
+                frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
+            }
+            if knight.attack_area.is_empty() {
+                // sprite_posns[1] = Transform::ZERO;
+            } else {
+                frend.draw_sprite(
+                    0,
+                    Transform {
+                        w: 8,
+                        h: 8,
+                        x: knight.pos.x,
+                        y: knight.pos.y,
+                        rot: 0.0,
+                    },
+                    BLANK.with_depth(2),
+                );
+    
+                frend.draw_sprite(
+                    0,
+                    Transform {
+                        w: (knight.attack_range as usize * TILE_SZ) as u16,
+                        h: (knight.attack_range as usize * TILE_SZ) as u16,
+                        x: knight.pos.x,
+                        y: knight.pos.y,
+                        rot: 0.0,
+                    },
+                    ATK.with_depth(2),
+                );
+            }
+        }
+
         // draw pause menu & HUD
         self.draw_hud(frend);
 
-        if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
-            frend.draw_sprite(
-                0,
-                Transform {
-                    w: TILE_SZ as u16,
-                    h: TILE_SZ as u16,
-                    x: world.player.pos.x,
-                    y: world.player.pos.y,
-                    rot: 0.0,
-                },
-                SheetRegion::ZERO,
-            );
-        } else {
-            frend.draw_sprite(
-                0,
-                Transform {
-                    w: TILE_SZ as u16,
-                    h: TILE_SZ as u16,
-                    x: world.player.pos.x,
-                    y: world.player.pos.y,
-                    rot: 0.0,
-                },
-                PLAYER.with_depth(2),
-            );
-        }
 
         if world.game_end {
             // player disappears when game ends (no more health)
@@ -305,39 +380,6 @@ impl engine::Game for SimGame {
                     rot: 0.0,
                 },
                 SheetRegion::ZERO,
-            );
-        }
-
-        if self.attack_area.is_empty() {
-            // sprite_posns[1] = Transform::ZERO;
-        } else {
-            let (w, h) = match world.player.dir {
-                Dir::N | Dir::S => (16, 8),
-                _ => (8, 16),
-            };
-            let delta = world.player.dir.to_vec2() * 7.0;
-            frend.draw_sprite(
-                0,
-                Transform {
-                    w,
-                    h,
-                    x: world.player.pos.x + delta.x,
-                    y: world.player.pos.y + delta.y,
-                    rot: 0.0,
-                },
-                BLANK.with_depth(2),
-            );
-
-            frend.draw_sprite(
-                0,
-                Transform {
-                    w: (self.attack_range as usize * TILE_SZ) as u16,
-                    h: (self.attack_range as usize * TILE_SZ) as u16,
-                    x: world.player.pos.x,
-                    y: world.player.pos.y,
-                    rot: 0.0,
-                },
-                ATK.with_depth(2),
             );
         }
 
@@ -479,6 +521,34 @@ impl engine::Game for SimGame {
             dir: Dir::S,
         });
         SimGame::new(world)
+    }
+}
+
+fn spawn_humans(world: &mut World, game: &mut SimGame) {
+    let mut rng = rand::thread_rng();
+    let rand = rng.gen_range(0..1000);
+    if rand > 960 {
+        let mut randx = rng.gen_range(2..world.levels[world.current_level].width()*TILE_SZ);
+        let mut randy = rng.gen_range(2..world.levels[world.current_level].height()*TILE_SZ);
+        while ((randx as f32 - world.player.pos.x).abs() < 48.0) && ((randy as f32 - world.player.pos.y).abs() < 48.0)
+        && !world.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid  {
+            randx = rng.gen_range(2..world.levels[world.current_level].width()*TILE_SZ);
+            randy = rng.gen_range(2..world.levels[world.current_level].height()*TILE_SZ);
+        } 
+        let knight_data = Knight {
+            health: 3,
+            attack_area: Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 0,
+                h: 0,
+            },
+            knockback_timer: 0.0,
+            attack_timer: 0.0,
+            attack_range: 3.0,
+            pos: Vec2{x: randx as f32, y: randy as f32},
+        };
+        game.humans.push(knight_data);
     }
 }
 

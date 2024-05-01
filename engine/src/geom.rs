@@ -76,4 +76,5 @@ impl Vec2 {
             y: self.y / mag,
         }
     }
+
 }

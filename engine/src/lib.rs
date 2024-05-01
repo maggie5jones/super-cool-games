@@ -90,24 +90,6 @@ impl World {
             self.enemies.push((monster, 1));
         }
     }
-    pub fn spawn_players(&mut self) {
-        let mut rng = rand::thread_rng();
-        let rand = rng.gen_range(0..1000);
-        if rand > 960 {
-            let mut randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
-            let mut randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
-            while ((randx as f32 - self.player.pos.x).abs() < 48.0) && ((randy as f32 - self.player.pos.y).abs() < 48.0)
-            && !self.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid  {
-                randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
-                randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
-            } 
-            let monster = Pos {
-                pos: Vec2{x: randx as f32, y: randy as f32},
-                dir: Dir::S,
-            };
-            self.enemies.push((monster, 1));
-        }
-    }
     pub fn set_camera(&mut self, camera: Camera2D) {
         self.camera = camera;
     }
