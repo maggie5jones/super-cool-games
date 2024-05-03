@@ -134,8 +134,12 @@ impl AdventureGame {
         }
     }
     fn simulate(&mut self, world: &mut World, input: &Input, dt: f32) {
-        if !world.paused {
-            world.spawn_enemies();
+        if !world.paused && !world.game_end {
+            let mut rng = rand::thread_rng();
+            let rand = rng.gen_range(0..1000);
+            if rand > 960 {
+                world.spawn_enemies();
+            }
         }
 
         if self.xp >= LEVELUP {
@@ -153,7 +157,7 @@ impl AdventureGame {
             if input.is_key_pressed(Key::KeyE) {
                 world.pause();
                 self.upgrade = false;
-                self.attack_range += 0.5;
+                self.attack_range += 1.0;
             }
         }
         if input.is_key_pressed(Key::Escape) {
@@ -323,6 +327,7 @@ impl AdventureGame {
                     self.health -= 1;
                     if self.health == 0 {
                         world.game_end = true;
+                        world.paused = true;
                     }
                 } else if self.knockback_timer < KNOCKBACK_TIME {
                     // "turn off" the ability to get hit
@@ -393,7 +398,7 @@ impl engine::Game for AdventureGame {
                     y: world.player.pos.y,
                     rot: 0.0,
                 },
-                PLAYER[world.player.dir as usize].with_depth(2),
+                PLAYER[world.player.dir as usize].with_depth(3),
             );
         }
         if world.game_end {
@@ -418,14 +423,13 @@ impl engine::Game for AdventureGame {
                 Dir::N | Dir::S => (16, 8),
                 _ => (8, 16),
             };
-            let delta = world.player.dir.to_vec2() * 7.0;
             frend.draw_sprite(
                 0,
                 Transform {
                     w,
                     h,
-                    x: world.player.pos.x + delta.x,
-                    y: world.player.pos.y + delta.y,
+                    x: world.player.pos.x,
+                    y: world.player.pos.y,
                     rot: 0.0,
                 },
                 BLANK.with_depth(2),
@@ -436,8 +440,8 @@ impl engine::Game for AdventureGame {
                 Transform {
                     w: (self.attack_range as usize * TILE_SZ) as u16,
                     h: (self.attack_range as usize * TILE_SZ) as u16,
-                    x: world.player.pos.x,
-                    y: world.player.pos.y,
+                    x: world.player.pos.x + 2.0,
+                    y: world.player.pos.y - 2.0,
                     rot: 0.0,
                 },
                 ATK.with_depth(2),
@@ -519,7 +523,7 @@ impl engine::Game for AdventureGame {
                     },
                     HEART.with_depth(1),
                 );
-                text = ":Q";
+                text = "Q: health";
                 frend.draw_text(
                     1,
                     &font,
@@ -547,7 +551,7 @@ impl engine::Game for AdventureGame {
                     },
                     ATK.with_depth(1),
                 );
-                text = ":E";
+                text = "E: range";
                 frend.draw_text(
                     1,
                     &font,
@@ -555,6 +559,19 @@ impl engine::Game for AdventureGame {
                     [
                         (W / 2) as f32 - 3.5 * TILE_SZ as f32 + 10.0,
                         (H / 2) as f32 - TILE_SZ as f32,
+                    ],
+                    0,
+                    (TILE_SZ / 2) as f32,
+                );
+            } else if world.game_end {
+                let text = "game over!";
+                frend.draw_text(
+                    1,
+                    &font,
+                    text,
+                    [
+                        (W / 2) as f32 - 3.0 * TILE_SZ as f32,
+                        (H / 2) as f32 + TILE_SZ as f32,
                     ],
                     0,
                     (TILE_SZ / 2) as f32,

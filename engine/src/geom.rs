@@ -77,4 +77,12 @@ impl Vec2 {
         }
     }
 
+    pub fn negate(&self) -> Vec2 {
+        let mag = self.mag_sq().sqrt();
+        Vec2 {
+            x: self.x / mag,
+            y: self.y / mag,
+        }
+    }
+
 }

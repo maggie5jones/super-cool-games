@@ -2,7 +2,6 @@ use assets_manager::{asset::Png, AssetCache};
 use engine::level::Level;
 use engine::Contact;
 use engine::Dir;
-use engine::Game;
 use engine::Pos;
 use engine::{geom::*, World};
 use frenderer::{
@@ -14,12 +13,7 @@ use rand::Rng;
 
 const PLAYER: SheetRegion = SheetRegion::rect(51, 0, 16, 16);
 const KNIGHT1: SheetRegion = SheetRegion::rect(119, 17, 16, 16);
-const HAND: SheetRegion = SheetRegion::rect(102, 0, 16, 16);
 const ENEMY: SheetRegion = SheetRegion::rect(17, 0, 16, 16);
-
-const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
-const ATK: SheetRegion = SheetRegion::rect(152, 137, 8, 8);
-const BLANK: SheetRegion = SheetRegion::rect(600, 600, 16, 16);
 
 const TILE_SZ: usize = 16;
 const W: usize = 516; // 320
@@ -48,18 +42,19 @@ struct SimGame {
 
 struct Knight {
     pub health: u8,
-    pub attack_area: Rect,
-    pub attack_range: f32,
-    pub attack_timer: f32,
-    pub knockback_timer: f32,
     pub pos: Vec2,
 }
 
 impl Knight {
     fn find_enemy(&mut self, world: &mut World) -> Vec2 {
-        let mut closest = Vec2 {x: W as f32, y: H as f32,};
+        let mut closest = Vec2 {
+            x: W as f32,
+            y: H as f32,
+        };
         for enemy in world.enemies.iter_mut() {
-            if self.pos.mag_sq().sqrt() - enemy.0.pos.mag_sq().sqrt() < closest.mag_sq().sqrt() {
+            if (enemy.0.pos + (self.pos * -1.0)).mag_sq().sqrt()
+                < (closest + (self.pos * -1.0)).mag_sq().sqrt()
+            {
                 closest = enemy.0.pos;
             }
         }
@@ -69,9 +64,7 @@ impl Knight {
 
 impl SimGame {
     fn new(world: &mut World) -> Self {
-        let game = SimGame {
-            humans: vec![],
-        };
+        let game = SimGame { humans: vec![] };
         let player_start = *world.levels[world.current_level]
             .starts()
             .iter()
@@ -81,18 +74,12 @@ impl SimGame {
         world.enter_level(player_start);
         game
     }
-
-    fn draw_hud(&self, frend: &mut Immediate) {
-        // draw UI with health and experience
-    }
     fn simulate(&mut self, world: &mut World, input: &Input, dt: f32) {
-
-        if input.is_key_down(Key::KeyQ) {
+        if input.is_key_pressed(Key::KeyQ) {
             world.spawn_enemies();
         }
-        if input.is_key_down(Key::KeyE) {
+        if input.is_key_pressed(Key::KeyE) {
             spawn_humans(world, self);
-            
         }
         if input.is_key_pressed(Key::Escape) {
             world.pause();
@@ -109,7 +96,6 @@ impl SimGame {
             world.player.pos = dest;
         }
 
-        
         // for enemy in world.enemies.iter_mut() {
         //     let player_pos = world.player.pos;
         //     let enemy_pos = enemy.0.pos;
@@ -142,23 +128,10 @@ impl SimGame {
         }
 
         for human in self.humans.iter_mut() {
-            if human.attack_timer > 0.0 {
-                human.attack_timer -= dt;
-            }
-            if human.knockback_timer > 0.0 {
-                human.knockback_timer -= dt;
-            }
-            
-            let attacking = !human.attack_area.is_empty();
-            let _knockback = human.knockback_timer > 0.0;
-            if attacking {
-                human.find_enemy(world);
-            }
-
             let monster_pos = human.find_enemy(world);
             let human_pos = human.pos;
             let mut direction = Vec2 { x: 0.0, y: 0.0 };
-            direction.x  = monster_pos.x - human_pos.x;
+            direction.x = monster_pos.x - human_pos.x;
             direction.y = monster_pos.y - human_pos.y;
             let normalized_direction = direction.normalize();
             human.pos += normalized_direction * ENEMY_SPEED * dt;
@@ -199,6 +172,11 @@ impl SimGame {
         let enemy_rect: Vec<_> = world.enemies.iter().map(|e| make_rect(e.0.pos)).collect();
         generate_contact(&player, &enemy_rect, &mut contacts);
 
+        let knight_rect: Vec<_> = self.humans.iter().map(|e| make_rect(e.pos)).collect();
+        let mut knight_contacts: Vec<Contact>;
+        knight_contacts = vec![];
+        generate_contact(&knight_rect, &enemy_rect, &mut knight_contacts);
+
         // Tile and Player contacts
         let mut tile_contacts = Vec::new();
         generate_tile_contact(&[player[0]], world.level(), &mut tile_contacts);
@@ -206,6 +184,10 @@ impl SimGame {
         // Tile and Enemy contacts
         let mut tile_enemy_contacts = Vec::new();
         generate_tile_contact(&enemy_rect, world.level(), &mut tile_enemy_contacts);
+
+        // Tile and Knight contacts
+        let mut tile_knight_contacts = Vec::new();
+        generate_tile_contact(&knight_rect, world.level(), &mut tile_knight_contacts);
 
         // Contact Resolution for player vs. world
         tile_contacts.sort_by(|a, b| {
@@ -230,6 +212,18 @@ impl SimGame {
                 find_displacement(enemy_rect[contact.a_index], contact.b_rect);
         }
 
+        // Contact Resolution for knight vs. world
+        tile_knight_contacts.sort_by(|a, b| {
+            b.displacement
+                .mag_sq()
+                .partial_cmp(&a.displacement.mag_sq())
+                .unwrap()
+        });
+        for contact in tile_knight_contacts {
+            self.humans[contact.a_index].pos +=
+                find_displacement(knight_rect[contact.a_index], contact.b_rect);
+        }
+
         // For deleting enemies, it's best to add the enemy to a "to_remove" vec, and then remove those enemies after this loop is all done.
         contacts.sort_by(|a, b| {
             b.displacement
@@ -239,17 +233,27 @@ impl SimGame {
         });
 
         let mut removable = Vec::new();
-        for contact in contacts {
-            if contact.a_index == 1 && !removable.contains(&contact.b_index) {
+        let mut knight_removable = Vec::new();
+        for contact in knight_contacts {
+            if !removable.contains(&contact.b_index) {
                 world.enemies[contact.b_index].0.pos +=
-                    find_displacement(p_rect, enemy_rect[contact.b_index]);
+                    find_displacement(knight_rect[contact.a_index], enemy_rect[contact.b_index]);
                 removable.push(contact.b_index);
+                self.humans[contact.a_index].health -= 1;
+                if self.humans[contact.a_index].health == 0 {
+                    knight_removable.push(contact.a_index);
+                }
             }
         }
         // Alternatively, you could "disable" an enemy by giving it an `alive` flag or similar and setting that to false, not drawing or updating dead enemies.
         removable.sort();
         for i in removable.iter().rev() {
             world.enemies.swap_remove(*i);
+        }
+
+        knight_removable.sort();
+        for i in knight_removable.iter().rev() {
+            self.humans.swap_remove(*i);
         }
     }
 }
@@ -273,7 +277,7 @@ impl engine::Game for SimGame {
                 y: world.player.pos.y,
                 rot: 0.0,
             },
-            PLAYER.with_depth(1),
+            PLAYER.with_depth(2),
         );
 
         for enemy in world.enemies.iter() {
@@ -295,78 +299,18 @@ impl engine::Game for SimGame {
         }
 
         for knight in self.humans.iter() {
-            if knight.knockback_timer > 0.0 && knight.knockback_timer % 0.5 < 0.25 {
-                frend.draw_sprite(
-                    0,
-                    Transform {
-                        w: TILE_SZ as u16,
-                        h: TILE_SZ as u16,
-                        x: knight.pos.x,
-                        y: knight.pos.y,
-                        rot: 0.0,
-                    },
-                    SheetRegion::ZERO,
-                );
-            } else {
-                frend.draw_sprite(
-                    0,
-                    Transform {
-                        w: TILE_SZ as u16,
-                        h: TILE_SZ as u16,
-                        x: knight.pos.x,
-                        y: knight.pos.y,
-                        rot: 0.0,
-                    },
-                    KNIGHT1.with_depth(2),
-                );
-            }
-            if knight.attack_timer != 0.0 {
-                frend.draw_sprite(
-                    0,
-                    Transform {
-                        w: TILE_SZ as u16,
-                        h: TILE_SZ as u16,
-                        x: knight.pos.x,
-                        y: knight.pos.y,
-                        rot: 0.0,
-                    },
-                    KNIGHT1.with_depth(2),
-                );
-            } else {
-                frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
-            }
-            if knight.attack_area.is_empty() {
-                // sprite_posns[1] = Transform::ZERO;
-            } else {
-                frend.draw_sprite(
-                    0,
-                    Transform {
-                        w: 8,
-                        h: 8,
-                        x: knight.pos.x,
-                        y: knight.pos.y,
-                        rot: 0.0,
-                    },
-                    BLANK.with_depth(2),
-                );
-    
-                frend.draw_sprite(
-                    0,
-                    Transform {
-                        w: (knight.attack_range as usize * TILE_SZ) as u16,
-                        h: (knight.attack_range as usize * TILE_SZ) as u16,
-                        x: knight.pos.x,
-                        y: knight.pos.y,
-                        rot: 0.0,
-                    },
-                    ATK.with_depth(2),
-                );
-            }
+            frend.draw_sprite(
+                0,
+                Transform {
+                    w: TILE_SZ as u16,
+                    h: TILE_SZ as u16,
+                    x: knight.pos.x,
+                    y: knight.pos.y,
+                    rot: 0.0,
+                },
+                KNIGHT1.with_depth(2),
+            );
         }
-
-        // draw pause menu & HUD
-        self.draw_hud(frend);
-
 
         if world.game_end {
             // player disappears when game ends (no more health)
@@ -388,42 +332,42 @@ impl engine::Game for SimGame {
                 frenderer::nineslice::CornerSlice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(628, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(0, 306, 16, 16).with_depth(1),
                 },
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(34, 306, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 },
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(17, 306, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 },
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(51, 306, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 },
             );
-            let pause_x = W as f32 / 2.0 - 4.0 * TILE_SZ as f32;
+            let pause_x = W as f32 / 2.0 - 8.0 * TILE_SZ as f32;
             let pause_y = H as f32 / 2.0 - 3.0 * TILE_SZ as f32;
             frend.draw_nineslice(
                 1,
                 &nine_tiled,
                 pause_x,
                 pause_y,
-                8.0 * TILE_SZ as f32,
+                16.0 * TILE_SZ as f32,
                 6.0 * TILE_SZ as f32,
                 0,
             );
 
             let font = frenderer::bitfont::BitFont::with_sheet_region(
                 ' '..='ÿ',
-                SheetRegion::new(0, 0, 143, 0, 288, 70).with_depth(0),
+                SheetRegion::new(0, 0, 385, 0, 288, 70).with_depth(0),
                 8_u16,
                 8_u16,
                 1_u16,
@@ -437,7 +381,7 @@ impl engine::Game for SimGame {
                 text,
                 [
                     (W / 2) as f32 - 3.0 * TILE_SZ as f32,
-                    (H / 2) as f32 + TILE_SZ as f32,
+                    (H / 2) as f32 + 2.5 * TILE_SZ as f32,
                 ],
                 0,
                 (TILE_SZ / 2) as f32,
@@ -449,12 +393,35 @@ impl engine::Game for SimGame {
                 text,
                 [
                     (W / 2) as f32 - 3.25 * TILE_SZ as f32,
-                    (H / 2) as f32 - TILE_SZ as f32,
+                    (H / 2) as f32 - 2.0 * TILE_SZ as f32,
                 ],
                 0,
                 (TILE_SZ / 2) as f32,
             );
-        
+            text = "q: spawn skeletons";
+            frend.draw_text(
+                1,
+                &font,
+                text,
+                [
+                    (W / 2) as f32 - 4.5 * TILE_SZ as f32,
+                    (H / 2) as f32 + 1.0 * TILE_SZ as f32,
+                ],
+                0,
+                (TILE_SZ / 2) as f32,
+            );
+            text = "e: spawn knights";
+            frend.draw_text(
+                1,
+                &font,
+                text,
+                [
+                    (W / 2) as f32 - 4.5 * TILE_SZ as f32,
+                    (H / 2) as f32 + 0.0 * TILE_SZ as f32,
+                ],
+                0,
+                (TILE_SZ / 2) as f32,
+            );
         }
     }
     fn new(renderer: &mut Immediate, cache: AssetCache, world: &mut engine::World) -> Self {
@@ -469,32 +436,14 @@ impl engine::Game for SimGame {
             Some("tiles-sprites"),
         );
 
-        let levels = vec![
-            Level::from_str(
-                &cache
-                    .load::<String>("level3")
-                    .expect("Couldn't access level3.txt")
-                    .read(),
-                0,
-                0,
-            ),
-            Level::from_str(
-                &cache
-                    .load::<String>("level1")
-                    .expect("Couldn't access level1.txt")
-                    .read(),
-                0,
-                0,
-            ),
-            Level::from_str(
-                &cache
-                    .load::<String>("level2")
-                    .expect("Couldn't access level2.txt")
-                    .read(),
-                0,
-                0,
-            ),
-        ];
+        let levels = vec![Level::from_str(
+            &cache
+                .load::<String>("level3")
+                .expect("Couldn't access level3.txt")
+                .read(),
+            0,
+            0,
+        )];
         let current_level = 0;
         let camera = Camera2D {
             screen_pos: [0.0, 0.0],
@@ -526,30 +475,32 @@ impl engine::Game for SimGame {
 
 fn spawn_humans(world: &mut World, game: &mut SimGame) {
     let mut rng = rand::thread_rng();
-    let rand = rng.gen_range(0..1000);
-    if rand > 960 {
-        let mut randx = rng.gen_range(2..world.levels[world.current_level].width()*TILE_SZ);
-        let mut randy = rng.gen_range(2..world.levels[world.current_level].height()*TILE_SZ);
-        while ((randx as f32 - world.player.pos.x).abs() < 48.0) && ((randy as f32 - world.player.pos.y).abs() < 48.0)
-        && !world.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid  {
-            randx = rng.gen_range(2..world.levels[world.current_level].width()*TILE_SZ);
-            randy = rng.gen_range(2..world.levels[world.current_level].height()*TILE_SZ);
-        } 
-        let knight_data = Knight {
-            health: 3,
-            attack_area: Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 0,
-                h: 0,
-            },
-            knockback_timer: 0.0,
-            attack_timer: 0.0,
-            attack_range: 3.0,
-            pos: Vec2{x: randx as f32, y: randy as f32},
-        };
-        game.humans.push(knight_data);
+    let mut randx = rng
+        .gen_range(2 * TILE_SZ..world.levels[world.current_level].width() * TILE_SZ - 2 * TILE_SZ);
+    let mut randy = rng
+        .gen_range(2 * TILE_SZ..world.levels[world.current_level].height() * TILE_SZ - 2 * TILE_SZ);
+    while ((randx as f32 - world.player.pos.x).abs() < 48.0)
+        && ((randy as f32 - world.player.pos.y).abs() < 48.0)
+        && !world
+            .level()
+            .get_tile_at(Vec2 {
+                x: randx as f32,
+                y: randy as f32,
+            })
+            .unwrap()
+            .solid
+    {
+        randx = rng.gen_range(2..world.levels[world.current_level].width() * TILE_SZ);
+        randy = rng.gen_range(2..world.levels[world.current_level].height() * TILE_SZ);
     }
+    let knight_data = Knight {
+        health: 3,
+        pos: Vec2 {
+            x: randx as f32,
+            y: randy as f32,
+        },
+    };
+    game.humans.push(knight_data);
 }
 
 fn generate_contact(group_a: &[Rect], group_b: &[Rect], contacts: &mut Vec<Contact>) {
